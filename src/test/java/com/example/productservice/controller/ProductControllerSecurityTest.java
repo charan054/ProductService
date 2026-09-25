@@ -39,6 +39,7 @@ class ProductControllerSecurityTest {
         mockMvc.perform(get("/product/byName").param("name", "Widget")).andExpect(status().isOk());
         mockMvc.perform(get("/product/byCategory").param("category", "misc")).andExpect(status().isOk());
         mockMvc.perform(get("/product/search")).andExpect(status().isOk());
+        mockMvc.perform(get("/product/lowStock")).andExpect(status().isOk());
     }
 
     @Test
