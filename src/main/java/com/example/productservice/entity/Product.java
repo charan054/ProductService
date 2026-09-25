@@ -10,7 +10,8 @@ import lombok.Data;
     "productName",
     "productCategory",
     "productPrice",
-    "productStock"
+    "productStock",
+    "lowStockThreshold"
 })
 @Table(name="products")
 @Entity
@@ -23,5 +24,8 @@ public class Product {
     private String productCategory;
     private double productPrice;
     private int productStock;
+    // Alerts fire (see ProductService.updateStock/save) when stock drops to or below this. Defaults to 5 when a
+    // caller doesn't set it explicitly.
+    private int lowStockThreshold = 5;
 
 }
