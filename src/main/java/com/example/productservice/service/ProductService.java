@@ -5,6 +5,8 @@ import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
 import com.example.productservice.repository.ProductRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,8 @@ import java.util.List;
 
 @Service
 public class ProductService {
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
+
     @Autowired
     private ProductRepository productRepository;
     public Product save(Product product) {
@@ -25,7 +29,13 @@ public class ProductService {
         {
             throw new PriceException("Stock must be greater than 0");
         }
-        return productRepository.save(product);
+        if(product.getLowStockThreshold()<0)
+        {
+            throw new StockException("lowStockThreshold must not be negative");
+        }
+        Product saved = productRepository.save(product);
+        warnIfLowStock(saved);
+        return saved;
     }
     public List<Product> findAll() {
         return productRepository.findAll();
@@ -52,7 +62,29 @@ public class ProductService {
             throw new StockException("Stock is low");
         }
         product.setProductStock(newStock);
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        warnIfLowStock(saved);
+        return saved;
+    }
+    public Product updateLowStockThreshold(int id, int threshold) {
+        Product product = productRepository.findById(id).orElseThrow( ()-> new ItemNotFoundException("Product not found"));
+        if(threshold<0)
+        {
+            throw new StockException("lowStockThreshold must not be negative");
+        }
+        product.setLowStockThreshold(threshold);
+        Product saved = productRepository.save(product);
+        warnIfLowStock(saved);
+        return saved;
+    }
+    public List<Product> findLowStockProducts() {
+        return productRepository.findLowStockProducts();
+    }
+    private void warnIfLowStock(Product product) {
+        if (product.getProductStock() <= product.getLowStockThreshold()) {
+            log.warn("Low stock alert: product {} ({}) has {} unit(s) left, at or below its threshold of {}",
+                    product.getProductId(), product.getProductName(), product.getProductStock(), product.getLowStockThreshold());
+        }
     }
     public Product updatePrice(int id, double price) {
         Product product = productRepository.findById(id).orElseThrow( ()-> new ItemNotFoundException("Product not found"));

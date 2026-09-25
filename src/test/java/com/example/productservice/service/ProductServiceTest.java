@@ -136,4 +136,56 @@ class ProductServiceTest {
         when(productRepository.findAll()).thenReturn(all);
         assertEquals(all, service.findAll());
     }
+
+    // ---------- low-stock threshold ----------
+
+    @Test
+    void savedProductGetsTheDefaultThresholdWhenNotSpecified() {
+        Product p = new Product();
+        p.setProductName("Widget");
+        p.setProductCategory("misc");
+        p.setProductPrice(9.99);
+        p.setProductStock(10);
+        when(productRepository.save(p)).thenReturn(p);
+        Product result = service.save(p);
+        assertEquals(5, result.getLowStockThreshold());
+    }
+
+    @Test
+    void saveRejectsANegativeThreshold() {
+        Product p = stored(0, 9.99, 10);
+        p.setLowStockThreshold(-1);
+        assertThrows(StockException.class, () -> service.save(p));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void updateLowStockThresholdRejectsNegative() {
+        Product p = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        assertThrows(StockException.class, () -> service.updateLowStockThreshold(1, -1));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void updateLowStockThresholdAppliesTheChange() {
+        Product p = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(p)).thenReturn(p);
+        Product result = service.updateLowStockThreshold(1, 8);
+        assertEquals(8, result.getLowStockThreshold());
+    }
+
+    @Test
+    void updateLowStockThresholdThrowsWhenProductMissing() {
+        when(productRepository.findById(1)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.updateLowStockThreshold(1, 3));
+    }
+
+    @Test
+    void findLowStockProductsDelegatesToTheRepository() {
+        List<Product> lowStock = List.of(stored(1, 9.99, 2));
+        when(productRepository.findLowStockProducts()).thenReturn(lowStock);
+        assertEquals(lowStock, service.findLowStockProducts());
+    }
 }
