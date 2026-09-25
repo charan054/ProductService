@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/product/all", "/product/byId", "/product/byName", "/product/byCategory").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/product/all", "/product/byId", "/product/byName", "/product/byCategory", "/product/search").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // A controller-level failure (e.g. a validation error) triggers an internal dispatch to
                         // /error; ServiceKeyAuthenticationFilter doesn't re-run on that dispatch (OncePerRequestFilter
