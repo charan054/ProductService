@@ -65,6 +65,14 @@ public class ProductController {
     public Product updateProductStock(@RequestParam Integer id, @RequestParam Integer stock){
         return productService.updateStock(id, stock);
     }
+    @PutMapping("/updateLowStockThreshold")
+    public Product updateLowStockThreshold(@RequestParam Integer id, @RequestParam Integer threshold){
+        return productService.updateLowStockThreshold(id, threshold);
+    }
+    @GetMapping("/lowStock")
+    public List<Product> getLowStockProducts(){
+        return productService.findLowStockProducts();
+    }
     @DeleteMapping("/delete")
     public void deleteProduct(@RequestParam Integer id){
         productService.deleteById(id);
