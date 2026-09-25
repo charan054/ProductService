@@ -35,6 +35,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/product/all", "/product/byId", "/product/byName", "/product/byCategory").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // A controller-level failure (e.g. a validation error) triggers an internal dispatch to
+                        // /error; ServiceKeyAuthenticationFilter doesn't re-run on that dispatch (OncePerRequestFilter
+                        // skips ERROR dispatches by default), so without this the real error status gets clobbered
+                        // by a spurious 401 from the unauthenticated /error request.
+                        .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(new ServiceKeyAuthenticationFilter(serviceApiKey), UsernamePasswordAuthenticationFilter.class)
