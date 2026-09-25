@@ -3,13 +3,21 @@ package com.example.productservice.controller;
 import com.example.productservice.entity.Product;
 import com.example.productservice.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/product")
 public class ProductController {
+    private static final Set<String> SORTABLE_FIELDS = Set.of(
+            "productId", "productName", "productCategory", "productPrice", "productStock");
+
     @Autowired
     private ProductService productService;
     @PostMapping("/add")
@@ -19,6 +27,23 @@ public class ProductController {
     @GetMapping("/all")
     public List<Product> getAllProducts(){
         return productService.findAll();
+    }
+    @GetMapping("/search")
+    public Page<Product> searchProducts(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "productId") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir){
+        if (!SORTABLE_FIELDS.contains(sortBy)) {
+            throw new IllegalArgumentException("sortBy must be one of " + SORTABLE_FIELDS);
+        }
+        Sort sort = "desc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        return productService.search(name, category, minPrice, maxPrice, pageable);
     }
     @GetMapping("/byId")
     public Product getProductById(@RequestParam Integer id){
