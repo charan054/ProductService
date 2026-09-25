@@ -34,6 +34,10 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/product/all", "/product/byId", "/product/byName", "/product/byCategory", "/product/search").permitAll()
+                        // Reviews are customer-generated content, not a catalog change an admin/backend caller
+                        // makes - the same direct-from-customer trust level as the public GET catalog endpoints
+                        // above, not the X-Service-Key boundary that guards add/updatePrice/updateStock/delete.
+                        .requestMatchers("/product/*/reviews", "/product/*/reviews/*", "/product/*/rating-summary").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // A controller-level failure (e.g. a validation error) triggers an internal dispatch to
                         // /error; ServiceKeyAuthenticationFilter doesn't re-run on that dispatch (OncePerRequestFilter
