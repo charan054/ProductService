@@ -42,6 +42,13 @@ class ProductControllerSecurityTest {
         mockMvc.perform(get("/product/lowStock")).andExpect(status().isOk());
     }
 
+    // Regression: the static dashboard was 401ing before Spring Security's static-resource handler ever got to
+    // serve it, because nothing explicitly permitted it.
+    @Test
+    void staticDashboardIsPublic() throws Exception {
+        mockMvc.perform(get("/product.html")).andExpect(status().isOk());
+    }
+
     @Test
     void addProductWithoutKeyIsUnauthorized() throws Exception {
         mockMvc.perform(post("/product/add").contentType(MediaType.APPLICATION_JSON).content(NEW_PRODUCT))

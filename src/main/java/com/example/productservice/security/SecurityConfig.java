@@ -39,6 +39,10 @@ public class SecurityConfig {
                         // above, not the X-Service-Key boundary that guards add/updatePrice/updateStock/delete.
                         .requestMatchers("/product/*/reviews", "/product/*/reviews/*", "/product/*/rating-summary").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // The static dashboard itself - not a catalog change, just the HTML/JS shell. The
+                        // mutating buttons on it still hit the X-Service-Key-guarded endpoints above like any
+                        // other caller, so this only unblocks loading the page, not bypassing anything.
+                        .requestMatchers(HttpMethod.GET, "/product.html").permitAll()
                         // A controller-level failure (e.g. a validation error) triggers an internal dispatch to
                         // /error; ServiceKeyAuthenticationFilter doesn't re-run on that dispatch (OncePerRequestFilter
                         // skips ERROR dispatches by default), so without this the real error status gets clobbered
