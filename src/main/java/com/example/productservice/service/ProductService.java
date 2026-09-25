@@ -6,6 +6,9 @@ import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
 import com.example.productservice.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -62,5 +65,30 @@ public class ProductService {
     }
     public void delete(int id) {
         productRepository.deleteById(id);
+    }
+
+    public Page<Product> search(String name, String category, Double minPrice, Double maxPrice, Pageable pageable) {
+        if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
+            throw new PriceException("minPrice must not be greater than maxPrice");
+        }
+        Specification<Product> spec = null;
+        if (name != null && !name.isBlank()) {
+            String pattern = "%" + name.toLowerCase() + "%";
+            spec = and(spec, (root, query, cb) -> cb.like(cb.lower(root.get("productName")), pattern));
+        }
+        if (category != null && !category.isBlank()) {
+            spec = and(spec, (root, query, cb) -> cb.equal(cb.lower(root.get("productCategory")), category.toLowerCase()));
+        }
+        if (minPrice != null) {
+            spec = and(spec, (root, query, cb) -> cb.ge(root.get("productPrice"), minPrice));
+        }
+        if (maxPrice != null) {
+            spec = and(spec, (root, query, cb) -> cb.le(root.get("productPrice"), maxPrice));
+        }
+        return spec == null ? productRepository.findAll(pageable) : productRepository.findAll(spec, pageable);
+    }
+
+    private Specification<Product> and(Specification<Product> spec, Specification<Product> next) {
+        return spec == null ? next : spec.and(next);
     }
 }
