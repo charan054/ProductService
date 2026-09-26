@@ -1,9 +1,11 @@
 package com.example.productservice.service;
 
+import com.example.productservice.entity.Category;
 import com.example.productservice.entity.Product;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
+import com.example.productservice.repository.CategoryRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +22,8 @@ public class ProductService {
 
     @Autowired
     private ProductRepository productRepository;
+    @Autowired
+    private CategoryRepository categoryRepository;
     public Product save(Product product) {
         if(product.getProductPrice()<=0)
         {
@@ -33,9 +37,43 @@ public class ProductService {
         {
             throw new StockException("lowStockThreshold must not be negative");
         }
+        product.setProductCategory(resolveCategory(product.getProductCategory()));
         Product saved = productRepository.save(product);
         warnIfLowStock(saved);
         return saved;
+    }
+
+    // Finds-or-creates the Category by name (case-insensitive) and returns its canonical stored name, so
+    // "Shampoo" and "shampoo" end up as the exact same category instead of two near-duplicates.
+    private String resolveCategory(String categoryName) {
+        if (categoryName == null || categoryName.isBlank()) {
+            throw new IllegalArgumentException("Product category is required");
+        }
+        String trimmed = categoryName.trim();
+        return categoryRepository.findByCategoryNameIgnoreCase(trimmed)
+                .map(Category::getCategoryName)
+                .orElseGet(() -> {
+                    Category category = new Category();
+                    category.setCategoryName(trimmed);
+                    return categoryRepository.save(category).getCategoryName();
+                });
+    }
+
+    public Category saveCategory(Category category) {
+        if (category.getCategoryName() == null || category.getCategoryName().isBlank()) {
+            throw new IllegalArgumentException("Category name is required");
+        }
+        String name = category.getCategoryName().trim();
+        return categoryRepository.findByCategoryNameIgnoreCase(name)
+                .orElseGet(() -> {
+                    Category fresh = new Category();
+                    fresh.setCategoryName(name);
+                    return categoryRepository.save(fresh);
+                });
+    }
+
+    public List<Category> getCategories() {
+        return categoryRepository.findAll();
     }
     public List<Product> findAll() {
         return productRepository.findAll();
