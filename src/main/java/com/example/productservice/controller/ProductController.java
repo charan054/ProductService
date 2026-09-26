@@ -1,6 +1,7 @@
 package com.example.productservice.controller;
 
 import com.example.productservice.dto.BulkImportResult;
+import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
 import com.example.productservice.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +74,11 @@ public class ProductController {
     @PutMapping("/updatePrice")
     public Product updateProductPrice(@RequestParam Integer id, @RequestParam Double price){
         return productService.updatePrice(id, price);
+    }
+    // Same public trust level as the other catalog-browsing GETs above.
+    @GetMapping("/priceHistory")
+    public List<PriceHistory> getPriceHistory(@RequestParam Integer id){
+        return productService.getPriceHistory(id);
     }
     @PutMapping("/updateStock")
     public Product updateProductStock(@RequestParam Integer id, @RequestParam Integer stock){

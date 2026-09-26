@@ -447,6 +447,19 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">📉</div>
+        <div class="title-wrap">
+          <h2>Price History</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>View every price change recorded for a product. Public - no Service Key required.</p>
+      <input type="number" id="priceHistoryProductId" placeholder="Enter product ID" />
+      <button onclick="getPriceHistory()">View Price History</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📦</div>
         <div class="title-wrap">
           <h2>Update Stock</h2>
@@ -941,6 +954,15 @@
     });
     showStatus("Product price updated successfully. Result opened in new tab.", "success");
     openResultTab("Update Product Price", data);
+  }
+
+  async function getPriceHistory() {
+    const id = document.getElementById("priceHistoryProductId").value;
+    if (!id) return showStatus("Please enter a product ID.", "error");
+
+    const data = await apiCall(`${BASE_URL}/priceHistory?id=${encodeURIComponent(id)}`);
+    showStatus("Price history loaded successfully. Result opened in new tab.", "success");
+    openResultTab("Price History", data);
   }
 
   async function updateProductStock() {
