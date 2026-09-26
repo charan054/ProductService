@@ -55,7 +55,7 @@ public class ReviewService {
 
     public Page<Review> listReviews(Long productId, Pageable pageable) {
         productService.findById(productId.intValue());
-        return reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDesc(productId, pageable);
+        return reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(productId, pageable);
     }
 
     public RatingSummary ratingSummary(Long productId) {
@@ -94,7 +94,7 @@ public class ReviewService {
     }
 
     public Page<Review> getFlaggedReviews(Pageable pageable) {
-        return reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDesc(pageable);
+        return reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(pageable);
     }
 
     private void validateRating(int rating) {
