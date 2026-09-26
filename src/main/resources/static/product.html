@@ -282,6 +282,18 @@
   <section class="grid">
     <div class="card wide">
       <div class="card-header">
+        <div class="icon">🔑</div>
+        <div class="title-wrap">
+          <h2>Service Credentials</h2>
+          <span class="method">REQUIRED</span>
+        </div>
+      </div>
+      <p>Add/Update/Delete below require the same <code>X-Service-Key</code> value as this service's <code>.env</code>. It is remembered in this browser only.</p>
+      <input type="text" id="serviceKey" placeholder="X-Service-Key value" />
+    </div>
+
+    <div class="card wide">
+      <div class="card-header">
         <div class="icon">➕</div>
         <div class="title-wrap">
           <h2>Add Product</h2>
@@ -412,6 +424,21 @@
 
 <script>
   const BASE_URL = "http://localhost:8082/product";
+
+  const serviceKeyInput = document.getElementById("serviceKey");
+  serviceKeyInput.value = localStorage.getItem("productServiceKey") || "";
+  serviceKeyInput.addEventListener("input", () => {
+    localStorage.setItem("productServiceKey", serviceKeyInput.value);
+  });
+
+  function requireServiceKey() {
+    const key = serviceKeyInput.value;
+    if (!key) {
+      showStatus("Please enter the Service Key above first.", "error");
+      return null;
+    }
+    return key;
+  }
 
   async function apiCall(url, options = {}) {
     try {
@@ -687,17 +714,21 @@
       return showStatus("Please enter product name, category, price and stock.", "error");
     }
 
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
     const product = {
       productName: productName,
-      category: category,
-      price: Number(price),
-      stock: Number(stock)
+      productCategory: category,
+      productPrice: Number(price),
+      productStock: Number(stock)
     };
 
     const data = await apiCall(`${BASE_URL}/add`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Service-Key": serviceKey
       },
       body: JSON.stringify(product)
     });
@@ -744,8 +775,12 @@
 
     if (!id || !price) return showStatus("Please enter product ID and new price.", "error");
 
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
     const data = await apiCall(`${BASE_URL}/updatePrice?id=${encodeURIComponent(id)}&price=${encodeURIComponent(price)}`, {
-      method: "PUT"
+      method: "PUT",
+      headers: { "X-Service-Key": serviceKey }
     });
     showStatus("Product price updated successfully. Result opened in new tab.", "success");
     openResultTab("Update Product Price", data);
@@ -757,8 +792,12 @@
 
     if (!id || !stock) return showStatus("Please enter product ID and new stock.", "error");
 
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
     const data = await apiCall(`${BASE_URL}/updateStock?id=${encodeURIComponent(id)}&stock=${encodeURIComponent(stock)}`, {
-      method: "PUT"
+      method: "PUT",
+      headers: { "X-Service-Key": serviceKey }
     });
     showStatus("Product stock updated successfully. Result opened in new tab.", "success");
     openResultTab("Update Product Stock", data);
@@ -768,8 +807,12 @@
     const id = document.getElementById("deleteProductId").value;
     if (!id) return showStatus("Please enter product ID to delete.", "error");
 
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
     await apiCall(`${BASE_URL}/delete?id=${encodeURIComponent(id)}`, {
-      method: "DELETE"
+      method: "DELETE",
+      headers: { "X-Service-Key": serviceKey }
     });
 
     showStatus("Product deleted successfully. Result opened in new tab.", "success");
