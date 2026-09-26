@@ -204,7 +204,7 @@ class ReviewServiceTest {
     void getFlaggedReviewsDelegatesToTheRepository() {
         Review r = review(1, 1, 9999999999L, 4);
         r.setFlagged(true);
-        when(reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDesc(any()))
+        when(reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(any()))
                 .thenReturn(new PageImpl<>(List.of(r)));
 
         var result = service.getFlaggedReviews(PageRequest.of(0, 20));
