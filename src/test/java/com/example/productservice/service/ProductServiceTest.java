@@ -1,5 +1,6 @@
 package com.example.productservice.service;
 
+import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.Category;
 import com.example.productservice.entity.Product;
 import com.example.productservice.exception.ItemNotFoundException;
@@ -9,10 +10,13 @@ import com.example.productservice.repository.CategoryRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -362,5 +367,88 @@ class ProductServiceTest {
         c.setCategoryName("Shampoo");
         when(categoryRepository.findAll()).thenReturn(List.of(c));
         assertEquals(1, service.getCategories().size());
+    }
+
+    // ---------- bulkImportProducts ----------
+
+    private void stubSavesToPassThrough() {
+        stubCategoryLookupCreatesNew();
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private MockMultipartFile csv(String content) {
+        return new MockMultipartFile("file", "products.csv", "text/csv", content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void bulkImportProductsRejectsAnEmptyFile() {
+        assertThrows(IllegalArgumentException.class, () -> service.bulkImportProducts(csv("")));
+    }
+
+    @Test
+    void bulkImportProductsRejectsAHeaderMissingARequiredColumn() {
+        MockMultipartFile file = csv("productName,productCategory,productPrice\nWidget,misc,9.99\n");
+        assertThrows(IllegalArgumentException.class, () -> service.bulkImportProducts(file));
+    }
+
+    @Test
+    void bulkImportProductsImportsEveryValidRow() {
+        stubSavesToPassThrough();
+        MockMultipartFile file = csv(
+                "productName,productCategory,productPrice,productStock\n" +
+                "Widget,misc,9.99,10\n" +
+                "Gadget,misc,19.99,5\n");
+
+        BulkImportResult result = service.bulkImportProducts(file);
+
+        assertEquals(2, result.successCount());
+        assertEquals(0, result.failureCount());
+        assertEquals(List.of(), result.errors());
+        verify(productRepository, times(2)).save(any(Product.class));
+    }
+
+    @Test
+    void bulkImportProductsAppliesOptionalColumns() {
+        stubSavesToPassThrough();
+        MockMultipartFile file = csv(
+                "productName,productCategory,productPrice,productStock,productImageUrl,lowStockThreshold\n" +
+                "Widget,misc,9.99,10,https://example.com/w.png,2\n");
+
+        service.bulkImportProducts(file);
+
+        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(captor.capture());
+        assertEquals("https://example.com/w.png", captor.getValue().getProductImageUrl());
+        assertEquals(2, captor.getValue().getLowStockThreshold());
+    }
+
+    @Test
+    void bulkImportProductsRecordsAFailingRowWithoutStoppingTheRest() {
+        stubSavesToPassThrough();
+        MockMultipartFile file = csv(
+                "productName,productCategory,productPrice,productStock\n" +
+                "BadRow,misc,-5,10\n" +
+                "GoodRow,misc,9.99,10\n");
+
+        BulkImportResult result = service.bulkImportProducts(file);
+
+        assertEquals(1, result.successCount());
+        assertEquals(1, result.failureCount());
+        assertEquals(1, result.errors().get(0).rowNumber());
+        verify(productRepository, times(1)).save(any(Product.class));
+    }
+
+    @Test
+    void bulkImportProductsSkipsBlankLines() {
+        stubSavesToPassThrough();
+        MockMultipartFile file = csv(
+                "productName,productCategory,productPrice,productStock\n" +
+                "\n" +
+                "Widget,misc,9.99,10\n");
+
+        BulkImportResult result = service.bulkImportProducts(file);
+
+        assertEquals(1, result.successCount());
+        assertEquals(0, result.failureCount());
     }
 }

@@ -5,11 +5,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,6 +98,22 @@ class ProductControllerSecurityTest {
     @Test
     void relatedProductsIsPublicButReturns400ForAnUnknownId() throws Exception {
         mockMvc.perform(get("/product/related").param("id", "999999")).andExpect(status().isBadRequest());
+    }
+
+    private static final MockMultipartFile BULK_IMPORT_CSV = new MockMultipartFile(
+            "file", "products.csv", "text/csv",
+            "productName,productCategory,productPrice,productStock\nWidget,misc,9.99,10\n".getBytes(StandardCharsets.UTF_8));
+
+    @Test
+    void bulkImportWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(multipart("/product/bulkImport").file(BULK_IMPORT_CSV))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void bulkImportWithValidKeySucceeds() throws Exception {
+        mockMvc.perform(multipart("/product/bulkImport").file(BULK_IMPORT_CSV).header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk());
     }
 
     @Test

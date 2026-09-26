@@ -330,6 +330,19 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">📄</div>
+        <div class="title-wrap">
+          <h2>Bulk Import (CSV)</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Header row must include productName, productCategory, productPrice, productStock (productImageUrl and lowStockThreshold are optional). One bad row does not stop the rest.</p>
+      <input type="file" id="bulkImportFile" accept=".csv" />
+      <button class="green" onclick="bulkImportProducts()">Upload CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📋</div>
         <div class="title-wrap">
           <h2>All Products</h2>
@@ -778,6 +791,28 @@
     });
     showStatus("Product added successfully. Result opened in new tab.", "success");
     openResultTab("Add Product", data);
+  }
+
+  async function bulkImportProducts() {
+    const fileInput = document.getElementById("bulkImportFile");
+    const file = fileInput.files[0];
+    if (!file) return showStatus("Please choose a CSV file.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // No Content-Type header here - the browser sets multipart/form-data with the correct boundary itself.
+    const data = await apiCall(`${BASE_URL}/bulkImport`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey },
+      body: formData
+    });
+
+    showStatus(`Import finished: ${data.successCount} succeeded, ${data.failureCount} failed. Result opened in new tab.`, "success");
+    openResultTab("Bulk Import Result", [data]);
   }
 
   async function getAllProducts() {
