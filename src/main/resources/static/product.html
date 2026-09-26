@@ -406,6 +406,20 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🔗</div>
+        <div class="title-wrap">
+          <h2>Related Products</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>"You might also like": other products in the same category.</p>
+      <input type="number" id="relatedProductId" placeholder="Enter product ID" />
+      <input type="number" id="relatedLimit" placeholder="Max results (optional, default 5)" />
+      <button onclick="getRelatedProducts()">Get Related Products</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">💰</div>
         <div class="title-wrap">
           <h2>Update Price</h2>
@@ -822,6 +836,17 @@
     const data = await apiCall(`${BASE_URL}/byCategory?category=${encodeURIComponent(category)}`);
     showStatus("Products by category loaded successfully. Result opened in new tab.", "success");
     openResultTab("Products By Category", data);
+  }
+
+  async function getRelatedProducts() {
+    const id = document.getElementById("relatedProductId").value;
+    if (!id) return showStatus("Please enter a product ID.", "error");
+    const limit = document.getElementById("relatedLimit").value;
+
+    const url = `${BASE_URL}/related?id=${encodeURIComponent(id)}` + (limit ? `&limit=${encodeURIComponent(limit)}` : "");
+    const data = await apiCall(url);
+    showStatus("Related products loaded successfully. Result opened in new tab.", "success");
+    openResultTab("Related Products", data);
   }
 
   async function updateProductPrice() {

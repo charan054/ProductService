@@ -90,6 +90,24 @@ public class ProductService {
         return product;
     }
 
+    private static final int DEFAULT_RELATED_LIMIT = 5;
+    private static final int MAX_RELATED_LIMIT = 20;
+
+    // "You might also like": other products in the same category, excluding the product itself. Simple
+    // same-category matching rather than anything behavioral (no purchase-history/co-occurrence data exists
+    // anywhere in this system to base a smarter recommendation on).
+    public List<Product> getRelatedProducts(int id, Integer limit) {
+        Product product = findById(id);
+        int effectiveLimit = limit == null ? DEFAULT_RELATED_LIMIT : limit;
+        if (effectiveLimit <= 0 || effectiveLimit > MAX_RELATED_LIMIT) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_RELATED_LIMIT);
+        }
+        return productRepository.findByproductCategory(product.getProductCategory()).stream()
+                .filter(p -> !p.getProductId().equals(product.getProductId()))
+                .limit(effectiveLimit)
+                .toList();
+    }
+
     public void deleteById(int id) {
         productRepository.deleteById(id);
     }

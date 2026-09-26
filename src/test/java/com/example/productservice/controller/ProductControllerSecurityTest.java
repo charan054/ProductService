@@ -92,6 +92,11 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void relatedProductsIsPublicButReturns400ForAnUnknownId() throws Exception {
+        mockMvc.perform(get("/product/related").param("id", "999999")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void deleteWithoutKeyIsUnauthorized() throws Exception {
         mockMvc.perform(delete("/product/delete").param("id", "1"))
                 .andExpect(status().isUnauthorized());

@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/product/all", "/product/byId", "/product/byName", "/product/byCategory", "/product/search", "/product/lowStock").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/product/all", "/product/byId", "/product/byName", "/product/byCategory", "/product/search", "/product/lowStock", "/product/related").permitAll()
                         // Browsing the category list is catalog browsing, same trust level as the product GETs above.
                         .requestMatchers(HttpMethod.GET, "/category/all").permitAll()
                         // Reviews are customer-generated content, not a catalog change an admin/backend caller

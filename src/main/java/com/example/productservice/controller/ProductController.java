@@ -49,6 +49,11 @@ public class ProductController {
     public Product getProductById(@RequestParam Integer id){
         return productService.findById(id);
     }
+    // Same public trust level as the other catalog-browsing GETs above.
+    @GetMapping("/related")
+    public List<Product> getRelatedProducts(@RequestParam Integer id, @RequestParam(required = false) Integer limit){
+        return productService.getRelatedProducts(id, limit);
+    }
     @GetMapping("/byName")
     public List<Product> getProductByName(@RequestParam String name){
         return productService.findByName(name);

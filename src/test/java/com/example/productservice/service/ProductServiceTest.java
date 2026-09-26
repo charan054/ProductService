@@ -13,8 +13,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -124,6 +126,71 @@ class ProductServiceTest {
         Product p = stored(1, 9.99, 10);
         when(productRepository.findById(1)).thenReturn(Optional.of(p));
         assertEquals(p, service.findById(1));
+    }
+
+    // ---------- getRelatedProducts ----------
+
+    @Test
+    void getRelatedProductsThrowsWhenTheProductDoesNotExist() {
+        when(productRepository.findById(99)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.getRelatedProducts(99, null));
+    }
+
+    @Test
+    void getRelatedProductsExcludesTheProductItself() {
+        Product target = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(target));
+        Product sameCategory = stored(2, 12.0, 5);
+        // findByproductCategory("misc") would never return a product from a different category in the real
+        // repository - only the target and other same-category products are stubbed here.
+        when(productRepository.findByproductCategory("misc")).thenReturn(List.of(target, sameCategory));
+
+        List<Product> result = service.getRelatedProducts(1, null);
+
+        assertEquals(List.of(sameCategory), result);
+    }
+
+    @Test
+    void getRelatedProductsDefaultsToFiveResults() {
+        Product target = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(target));
+        List<Product> others = IntStream.rangeClosed(2, 8)
+                .mapToObj(i -> stored(i, 9.99, 10))
+                .toList();
+        List<Product> allInCategory = new ArrayList<>();
+        allInCategory.add(target);
+        allInCategory.addAll(others);
+        when(productRepository.findByproductCategory("misc")).thenReturn(allInCategory);
+
+        List<Product> result = service.getRelatedProducts(1, null);
+
+        assertEquals(5, result.size());
+    }
+
+    @Test
+    void getRelatedProductsRespectsAnExplicitLimit() {
+        Product target = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(target));
+        Product other = stored(2, 9.99, 10);
+        when(productRepository.findByproductCategory("misc")).thenReturn(List.of(target, other));
+
+        List<Product> result = service.getRelatedProducts(1, 1);
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void getRelatedProductsRejectsANonPositiveLimit() {
+        Product target = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(target));
+        assertThrows(IllegalArgumentException.class, () -> service.getRelatedProducts(1, 0));
+    }
+
+    @Test
+    void getRelatedProductsRejectsALimitAboveTheMaximum() {
+        Product target = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(target));
+        assertThrows(IllegalArgumentException.class, () -> service.getRelatedProducts(1, 21));
     }
 
     // ---------- updateStock ----------
