@@ -330,6 +330,19 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">📄</div>
+        <div class="title-wrap">
+          <h2>Bulk Import (CSV)</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Header row must include productName, productCategory, productPrice, productStock (productImageUrl and lowStockThreshold are optional). One bad row does not stop the rest.</p>
+      <input type="file" id="bulkImportFile" accept=".csv" />
+      <button class="green" onclick="bulkImportProducts()">Upload CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📋</div>
         <div class="title-wrap">
           <h2>All Products</h2>
@@ -406,6 +419,20 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🔗</div>
+        <div class="title-wrap">
+          <h2>Related Products</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>"You might also like": other products in the same category.</p>
+      <input type="number" id="relatedProductId" placeholder="Enter product ID" />
+      <input type="number" id="relatedLimit" placeholder="Max results (optional, default 5)" />
+      <button onclick="getRelatedProducts()">Get Related Products</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">💰</div>
         <div class="title-wrap">
           <h2>Update Price</h2>
@@ -443,6 +470,48 @@
       <p>Delete a product from the database using product ID.</p>
       <input type="number" id="deleteProductId" placeholder="Enter product ID" />
       <button class="red-btn" onclick="deleteProduct()">Delete Product</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🚩</div>
+        <div class="title-wrap">
+          <h2>Flag Review</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Report a review as inappropriate. No Service Key required.</p>
+      <input type="number" id="flagProductId" placeholder="Product ID" />
+      <input type="number" id="flagReviewId" placeholder="Review ID" />
+      <input type="text" id="flagReason" placeholder="Reason (optional)" />
+      <button class="orange" onclick="flagReview()">Flag Review</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🙈</div>
+        <div class="title-wrap">
+          <h2>Hide / Unhide Review</h2>
+          <span class="method">PUT</span>
+        </div>
+      </div>
+      <p>Moderation decision - hides a review from public listings and the rating average. Requires the Service Key above.</p>
+      <input type="number" id="moderateProductId" placeholder="Product ID" />
+      <input type="number" id="moderateReviewId" placeholder="Review ID" />
+      <button class="purple" onclick="hideReview()">Hide Review</button>
+      <button onclick="unhideReview()">Unhide Review</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">📋</div>
+        <div class="title-wrap">
+          <h2>Flagged Reviews Queue</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>View reviews flagged but not yet moderated. Requires the Service Key above.</p>
+      <button onclick="getFlaggedReviews()">View Flagged Reviews</button>
     </div>
   </section>
 
@@ -766,6 +835,28 @@
     openResultTab("Add Product", data);
   }
 
+  async function bulkImportProducts() {
+    const fileInput = document.getElementById("bulkImportFile");
+    const file = fileInput.files[0];
+    if (!file) return showStatus("Please choose a CSV file.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // No Content-Type header here - the browser sets multipart/form-data with the correct boundary itself.
+    const data = await apiCall(`${BASE_URL}/bulkImport`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey },
+      body: formData
+    });
+
+    showStatus(`Import finished: ${data.successCount} succeeded, ${data.failureCount} failed. Result opened in new tab.`, "success");
+    openResultTab("Bulk Import Result", [data]);
+  }
+
   async function getAllProducts() {
     const data = await apiCall(`${BASE_URL}/all`);
     showStatus("All products loaded successfully. Result opened in new tab.", "success");
@@ -824,6 +915,17 @@
     openResultTab("Products By Category", data);
   }
 
+  async function getRelatedProducts() {
+    const id = document.getElementById("relatedProductId").value;
+    if (!id) return showStatus("Please enter a product ID.", "error");
+    const limit = document.getElementById("relatedLimit").value;
+
+    const url = `${BASE_URL}/related?id=${encodeURIComponent(id)}` + (limit ? `&limit=${encodeURIComponent(limit)}` : "");
+    const data = await apiCall(url);
+    showStatus("Related products loaded successfully. Result opened in new tab.", "success");
+    openResultTab("Related Products", data);
+  }
+
   async function updateProductPrice() {
     const id = document.getElementById("priceProductId").value;
     const price = document.getElementById("newPrice").value;
@@ -875,6 +977,66 @@
       message: "Product deleted successfully",
       deletedProductId: id
     });
+  }
+
+  async function flagReview() {
+    const productId = document.getElementById("flagProductId").value;
+    const reviewId = document.getElementById("flagReviewId").value;
+    if (!productId || !reviewId) return showStatus("Please enter a product ID and review ID.", "error");
+    const reason = document.getElementById("flagReason").value;
+
+    const url = `${BASE_URL}/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/flag` +
+      (reason ? `?reason=${encodeURIComponent(reason)}` : "");
+    const data = await apiCall(url, { method: "POST" });
+
+    showStatus("Review flagged successfully. Result opened in new tab.", "success");
+    openResultTab("Flag Review", data);
+  }
+
+  async function hideReview() {
+    const productId = document.getElementById("moderateProductId").value;
+    const reviewId = document.getElementById("moderateReviewId").value;
+    if (!productId || !reviewId) return showStatus("Please enter a product ID and review ID.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/hide`, {
+      method: "PUT",
+      headers: { "X-Service-Key": serviceKey }
+    });
+
+    showStatus("Review hidden successfully. Result opened in new tab.", "success");
+    openResultTab("Hide Review", data);
+  }
+
+  async function unhideReview() {
+    const productId = document.getElementById("moderateProductId").value;
+    const reviewId = document.getElementById("moderateReviewId").value;
+    if (!productId || !reviewId) return showStatus("Please enter a product ID and review ID.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/unhide`, {
+      method: "PUT",
+      headers: { "X-Service-Key": serviceKey }
+    });
+
+    showStatus("Review unhidden successfully. Result opened in new tab.", "success");
+    openResultTab("Unhide Review", data);
+  }
+
+  async function getFlaggedReviews() {
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`${BASE_URL}/reviews/flagged`, {
+      headers: { "X-Service-Key": serviceKey }
+    });
+
+    showStatus("Flagged reviews loaded successfully. Result opened in new tab.", "success");
+    openResultTab("Flagged Reviews", data.content || data);
   }
 </script>
 </body>

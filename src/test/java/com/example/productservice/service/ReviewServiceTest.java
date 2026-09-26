@@ -10,11 +10,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -118,7 +124,7 @@ class ReviewServiceTest {
     void ratingSummaryReturnsZeroWhenNoReviewsExist() {
         when(productService.findById(1)).thenReturn(product(1));
         when(reviewRepository.averageRatingForProduct(1L)).thenReturn(null);
-        when(reviewRepository.countByProductId(1L)).thenReturn(0L);
+        when(reviewRepository.countByProductIdAndHiddenFalse(1L)).thenReturn(0L);
         var summary = service.ratingSummary(1L);
         assertEquals(0.0, summary.averageRating());
         assertEquals(0L, summary.reviewCount());
@@ -128,9 +134,81 @@ class ReviewServiceTest {
     void ratingSummaryRoundsAverageToOneDecimal() {
         when(productService.findById(1)).thenReturn(product(1));
         when(reviewRepository.averageRatingForProduct(1L)).thenReturn(4.666666);
-        when(reviewRepository.countByProductId(1L)).thenReturn(3L);
+        when(reviewRepository.countByProductIdAndHiddenFalse(1L)).thenReturn(3L);
         var summary = service.ratingSummary(1L);
         assertEquals(4.7, summary.averageRating());
         assertEquals(3L, summary.reviewCount());
+    }
+
+    // ---------- flagReview / hideReview / unhideReview / getFlaggedReviews ----------
+
+    @Test
+    void flagReviewThrowsWhenMissing() {
+        when(reviewRepository.findById(1L)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.flagReview(1L, "Spam"));
+    }
+
+    @Test
+    void flagReviewSetsFlaggedAndReason() {
+        Review r = review(1, 1, 9999999999L, 4);
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(r));
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Review result = service.flagReview(1L, "Spam");
+
+        assertTrue(result.isFlagged());
+        assertEquals("Spam", result.getFlagReason());
+    }
+
+    @Test
+    void flagReviewTreatsABlankReasonAsNone() {
+        Review r = review(1, 1, 9999999999L, 4);
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(r));
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Review result = service.flagReview(1L, "  ");
+
+        assertNull(result.getFlagReason());
+    }
+
+    @Test
+    void hideReviewThrowsWhenMissing() {
+        when(reviewRepository.findById(1L)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.hideReview(1L));
+    }
+
+    @Test
+    void hideReviewSetsHidden() {
+        Review r = review(1, 1, 9999999999L, 4);
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(r));
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Review result = service.hideReview(1L);
+
+        assertTrue(result.isHidden());
+    }
+
+    @Test
+    void unhideReviewClearsHidden() {
+        Review r = review(1, 1, 9999999999L, 4);
+        r.setHidden(true);
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(r));
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Review result = service.unhideReview(1L);
+
+        assertFalse(result.isHidden());
+    }
+
+    @Test
+    void getFlaggedReviewsDelegatesToTheRepository() {
+        Review r = review(1, 1, 9999999999L, 4);
+        r.setFlagged(true);
+        when(reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDesc(any()))
+                .thenReturn(new PageImpl<>(List.of(r)));
+
+        var result = service.getFlaggedReviews(PageRequest.of(0, 20));
+
+        assertEquals(1, result.getTotalElements());
     }
 }

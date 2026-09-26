@@ -13,7 +13,10 @@ import java.time.LocalDateTime;
         "reviewerPhno",
         "rating",
         "comment",
-        "createdAt"
+        "createdAt",
+        "flagged",
+        "flagReason",
+        "hidden"
 })
 @Table(name = "reviews", uniqueConstraints = @UniqueConstraint(columnNames = {"productId", "reviewerPhno"}))
 @Entity
@@ -28,4 +31,12 @@ public class Review {
     private int rating;
     private String comment;
     private LocalDateTime createdAt = LocalDateTime.now();
+    // Set by ReviewService.flagReview() - a customer reporting a review, not a moderation decision itself. A
+    // flagged review still shows up publicly until an admin actually hides it.
+    private boolean flagged;
+    private String flagReason;
+    // Set by ReviewService.hideReview()/unhideReview() - the actual moderation decision. Hidden reviews are
+    // excluded from listReviews() and ratingSummary() (both the average and the count), same as if deleted, but
+    // recoverable via unhideReview() unlike an actual delete.
+    private boolean hidden;
 }

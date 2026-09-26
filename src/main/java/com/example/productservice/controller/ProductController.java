@@ -1,5 +1,6 @@
 package com.example.productservice.controller;
 
+import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.Product;
 import com.example.productservice.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Set;
@@ -23,6 +25,12 @@ public class ProductController {
     @PostMapping("/add")
     public Product addProduct(@RequestBody Product product){
         return productService.save(product);
+    }
+    // Same X-Service-Key boundary as add above - falls under the default authenticated rule, no SecurityConfig
+    // changes needed.
+    @PostMapping("/bulkImport")
+    public BulkImportResult bulkImportProducts(@RequestParam("file") MultipartFile file){
+        return productService.bulkImportProducts(file);
     }
     @GetMapping("/all")
     public List<Product> getAllProducts(){
@@ -48,6 +56,11 @@ public class ProductController {
     @GetMapping("/byId")
     public Product getProductById(@RequestParam Integer id){
         return productService.findById(id);
+    }
+    // Same public trust level as the other catalog-browsing GETs above.
+    @GetMapping("/related")
+    public List<Product> getRelatedProducts(@RequestParam Integer id, @RequestParam(required = false) Integer limit){
+        return productService.getRelatedProducts(id, limit);
     }
     @GetMapping("/byName")
     public List<Product> getProductByName(@RequestParam String name){
