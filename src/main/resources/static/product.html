@@ -288,7 +288,7 @@
           <span class="method">REQUIRED</span>
         </div>
       </div>
-      <p>Add/Update/Delete below require the same <code>X-Service-Key</code> value as this service's <code>.env</code>. It is remembered in this browser only.</p>
+      <p>Add/Update/Delete and Add Category below require the same <code>X-Service-Key</code> value as this service's <code>.env</code>. It is remembered in this browser only.</p>
       <input type="text" id="serviceKey" placeholder="X-Service-Key value" />
     </div>
 
@@ -308,6 +308,7 @@
           <tr>
             <th>Product Name</th>
             <th>Category</th>
+            <th>Image URL</th>
             <th>Price</th>
             <th>Stock</th>
           </tr>
@@ -316,6 +317,7 @@
           <tr>
             <td><input type="text" id="addProductName" placeholder="iPhone 15" /></td>
             <td><input type="text" id="addCategory" placeholder="Mobile" /></td>
+            <td><input type="text" id="addImageUrl" placeholder="https://... (optional)" /></td>
             <td><input type="number" id="addPrice" placeholder="75000" /></td>
             <td><input type="number" id="addStock" placeholder="10" /></td>
           </tr>
@@ -336,6 +338,31 @@
       </div>
       <p>View all products from the database in a separate result tab.</p>
       <button onclick="getAllProducts()">View Products</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🏷️</div>
+        <div class="title-wrap">
+          <h2>Add Category</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Create a category (or reuse it if the name already exists). Requires the Service Key above.</p>
+      <input type="text" id="newCategoryName" placeholder="Category name, e.g. Gadgets" />
+      <button class="green" onclick="addCategory()">Add Category</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">📚</div>
+        <div class="title-wrap">
+          <h2>All Categories</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>View all categories from the database in a separate result tab.</p>
+      <button onclick="getAllCategories()">View Categories</button>
     </div>
 
     <div class="card">
@@ -717,9 +744,12 @@
     const serviceKey = requireServiceKey();
     if (!serviceKey) return;
 
+    const imageUrl = document.getElementById("addImageUrl").value;
+
     const product = {
       productName: productName,
       productCategory: category,
+      productImageUrl: imageUrl || null,
       productPrice: Number(price),
       productStock: Number(stock)
     };
@@ -740,6 +770,31 @@
     const data = await apiCall(`${BASE_URL}/all`);
     showStatus("All products loaded successfully. Result opened in new tab.", "success");
     openResultTab("All Products", data);
+  }
+
+  async function addCategory() {
+    const categoryName = document.getElementById("newCategoryName").value;
+    if (!categoryName) return showStatus("Please enter a category name.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`http://localhost:8082/category/add`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Service-Key": serviceKey
+      },
+      body: JSON.stringify({ categoryName: categoryName })
+    });
+    showStatus("Category saved successfully. Result opened in new tab.", "success");
+    openResultTab("Add Category", data);
+  }
+
+  async function getAllCategories() {
+    const data = await apiCall(`http://localhost:8082/category/all`);
+    showStatus("All categories loaded successfully. Result opened in new tab.", "success");
+    openResultTab("All Categories", data);
   }
 
   async function getProductById() {
