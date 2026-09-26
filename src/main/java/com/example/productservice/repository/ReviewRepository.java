@@ -21,6 +21,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     Page<Review> findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(Long productId, Pageable pageable);
     Optional<Review> findByProductIdAndReviewerPhno(Long productId, long reviewerPhno);
     long countByProductIdAndHiddenFalse(Long productId);
+    // How many (visible) reviews a given customer has left across every product - used by OrderService's
+    // cross-service customer profile rollup. Hidden reviews are excluded, same treatment as everywhere else.
+    long countByReviewerPhnoAndHiddenFalse(long reviewerPhno);
     // The moderation queue: reviews a customer has flagged that an admin hasn't already acted on. Once hidden,
     // a flagged review drops out of this queue - there's nothing left to decide. Same tiebreaker reasoning as
     // above.

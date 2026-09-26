@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -216,5 +217,19 @@ class ReviewControllerTest {
         mockMvc.perform(get("/product/reviews/flagged").header("X-Service-Key", "test-service-key"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void reviewCountIsPublic() throws Exception {
+        mockMvc.perform(get("/product/reviews/count").param("phno", "9999999999")).andExpect(status().isOk());
+    }
+
+    @Test
+    void reviewCountReflectsHowManyVisibleReviewsThatCustomerHasPosted() throws Exception {
+        addReview("Alice", 9999999999L, 5, "Great");
+
+        mockMvc.perform(get("/product/reviews/count").param("phno", "9999999999"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("1"));
     }
 }

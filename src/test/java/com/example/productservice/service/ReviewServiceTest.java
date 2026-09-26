@@ -201,6 +201,12 @@ class ReviewServiceTest {
     }
 
     @Test
+    void getReviewCountForCustomerDelegatesToTheRepository() {
+        when(reviewRepository.countByReviewerPhnoAndHiddenFalse(9999999999L)).thenReturn(3L);
+        assertEquals(3L, service.getReviewCountForCustomer(9999999999L));
+    }
+
+    @Test
     void getFlaggedReviewsDelegatesToTheRepository() {
         Review r = review(1, 1, 9999999999L, 4);
         r.setFlagged(true);

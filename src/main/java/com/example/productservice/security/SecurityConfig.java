@@ -44,6 +44,9 @@ public class SecurityConfig {
                         // hide/unhide are deliberately NOT listed here, so they fall through to the
                         // X-Service-Key-authenticated default below (an admin-only moderation decision).
                         .requestMatchers("/product/*/reviews/*/flag").permitAll()
+                        // A count, not any one review's content - same customer-generated-content trust level as
+                        // browsing reviews above. Called by OrderService (via Feign) for its customer profile.
+                        .requestMatchers(HttpMethod.GET, "/product/reviews/count").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // The static dashboard itself - not a catalog change, just the HTML/JS shell. The
                         // mutating buttons on it still hit the X-Service-Key-guarded endpoints above like any

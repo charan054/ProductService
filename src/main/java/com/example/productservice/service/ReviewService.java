@@ -97,6 +97,12 @@ public class ReviewService {
         return reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(pageable);
     }
 
+    // Used by OrderService's cross-service customer profile rollup (via Feign) - not this service's own
+    // concept of a customer, just a count of what that phone number has posted here.
+    public long getReviewCountForCustomer(long reviewerPhno) {
+        return reviewRepository.countByReviewerPhnoAndHiddenFalse(reviewerPhno);
+    }
+
     private void validateRating(int rating) {
         if (rating < 1 || rating > 5) {
             throw new ReviewException("Rating must be between 1 and 5");

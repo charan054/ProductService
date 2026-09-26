@@ -65,4 +65,11 @@ public class ReviewController {
                                            @RequestParam(defaultValue = "20") int size) {
         return reviewService.getFlaggedReviews(PageRequest.of(page, size));
     }
+
+    // Public, same customer-generated-content trust level as browsing reviews - a count, not any one review's
+    // content. Called by OrderService (via Feign) to build its cross-service customer profile.
+    @GetMapping("/reviews/count")
+    public long getReviewCount(@RequestParam long phno) {
+        return reviewService.getReviewCountForCustomer(phno);
+    }
 }
