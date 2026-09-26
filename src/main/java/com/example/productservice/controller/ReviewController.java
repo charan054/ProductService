@@ -41,4 +41,28 @@ public class ReviewController {
     public RatingSummary getRatingSummary(@PathVariable Long productId) {
         return reviewService.ratingSummary(productId);
     }
+
+    // Public, same trust level as posting a review - reporting one is a customer action, not an admin decision.
+    @PostMapping("/{productId}/reviews/{reviewId}/flag")
+    public Review flagReview(@PathVariable Long reviewId, @RequestParam(required = false) String reason) {
+        return reviewService.flagReview(reviewId, reason);
+    }
+
+    // Admin-only (falls under the default X-Service-Key-authenticated rule - no path here matches any of the
+    // public review patterns in SecurityConfig).
+    @PutMapping("/{productId}/reviews/{reviewId}/hide")
+    public Review hideReview(@PathVariable Long reviewId) {
+        return reviewService.hideReview(reviewId);
+    }
+
+    @PutMapping("/{productId}/reviews/{reviewId}/unhide")
+    public Review unhideReview(@PathVariable Long reviewId) {
+        return reviewService.unhideReview(reviewId);
+    }
+
+    @GetMapping("/reviews/flagged")
+    public Page<Review> getFlaggedReviews(@RequestParam(defaultValue = "0") int page,
+                                           @RequestParam(defaultValue = "20") int size) {
+        return reviewService.getFlaggedReviews(PageRequest.of(page, size));
+    }
 }

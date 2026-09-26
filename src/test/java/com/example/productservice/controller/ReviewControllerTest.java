@@ -148,4 +148,73 @@ class ReviewControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].reviewerName").value("Bob"));
     }
+
+    private long addReview(String name, long phno, int rating, String comment) throws Exception {
+        String body = mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJson(name, phno, rating, comment)))
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.reviewId")).longValue();
+    }
+
+    @Test
+    void flagReviewWithoutServiceKeySucceeds() throws Exception {
+        long reviewId = addReview("Alice", 9999999999L, 5, "Great");
+
+        mockMvc.perform(post("/product/" + productId + "/reviews/" + reviewId + "/flag").param("reason", "Spam"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.flagged").value(true))
+                .andExpect(jsonPath("$.flagReason").value("Spam"));
+    }
+
+    @Test
+    void hideReviewWithoutServiceKeyIsUnauthorized() throws Exception {
+        long reviewId = addReview("Alice", 9999999999L, 5, "Great");
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId + "/hide"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void hideReviewWithServiceKeyRemovesItFromListingsAndTheRatingAverage() throws Exception {
+        long reviewId = addReview("Alice", 9999999999L, 5, "Great");
+
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId + "/hide")
+                        .header("X-Service-Key", "test-service-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hidden").value(true));
+
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/product/" + productId + "/rating-summary"))
+                .andExpect(jsonPath("$.reviewCount").value(0));
+    }
+
+    @Test
+    void unhideReviewRestoresItToListings() throws Exception {
+        long reviewId = addReview("Alice", 9999999999L, 5, "Great");
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId + "/hide")
+                .header("X-Service-Key", "test-service-key"));
+
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId + "/unhide")
+                        .header("X-Service-Key", "test-service-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hidden").value(false));
+
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void flaggedReviewsQueueWithoutServiceKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(get("/product/reviews/flagged")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void flaggedReviewsQueueListsFlaggedButNotYetHiddenReviews() throws Exception {
+        long reviewId = addReview("Alice", 9999999999L, 5, "Great");
+        mockMvc.perform(post("/product/" + productId + "/reviews/" + reviewId + "/flag"));
+
+        mockMvc.perform(get("/product/reviews/flagged").header("X-Service-Key", "test-service-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
 }

@@ -471,6 +471,48 @@
       <input type="number" id="deleteProductId" placeholder="Enter product ID" />
       <button class="red-btn" onclick="deleteProduct()">Delete Product</button>
     </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🚩</div>
+        <div class="title-wrap">
+          <h2>Flag Review</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Report a review as inappropriate. No Service Key required.</p>
+      <input type="number" id="flagProductId" placeholder="Product ID" />
+      <input type="number" id="flagReviewId" placeholder="Review ID" />
+      <input type="text" id="flagReason" placeholder="Reason (optional)" />
+      <button class="orange" onclick="flagReview()">Flag Review</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🙈</div>
+        <div class="title-wrap">
+          <h2>Hide / Unhide Review</h2>
+          <span class="method">PUT</span>
+        </div>
+      </div>
+      <p>Moderation decision - hides a review from public listings and the rating average. Requires the Service Key above.</p>
+      <input type="number" id="moderateProductId" placeholder="Product ID" />
+      <input type="number" id="moderateReviewId" placeholder="Review ID" />
+      <button class="purple" onclick="hideReview()">Hide Review</button>
+      <button onclick="unhideReview()">Unhide Review</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">📋</div>
+        <div class="title-wrap">
+          <h2>Flagged Reviews Queue</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>View reviews flagged but not yet moderated. Requires the Service Key above.</p>
+      <button onclick="getFlaggedReviews()">View Flagged Reviews</button>
+    </div>
   </section>
 
   <div id="status" class="status-panel">Ready. Click any button. Result will open in a new browser tab as a table.</div>
@@ -935,6 +977,66 @@
       message: "Product deleted successfully",
       deletedProductId: id
     });
+  }
+
+  async function flagReview() {
+    const productId = document.getElementById("flagProductId").value;
+    const reviewId = document.getElementById("flagReviewId").value;
+    if (!productId || !reviewId) return showStatus("Please enter a product ID and review ID.", "error");
+    const reason = document.getElementById("flagReason").value;
+
+    const url = `${BASE_URL}/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/flag` +
+      (reason ? `?reason=${encodeURIComponent(reason)}` : "");
+    const data = await apiCall(url, { method: "POST" });
+
+    showStatus("Review flagged successfully. Result opened in new tab.", "success");
+    openResultTab("Flag Review", data);
+  }
+
+  async function hideReview() {
+    const productId = document.getElementById("moderateProductId").value;
+    const reviewId = document.getElementById("moderateReviewId").value;
+    if (!productId || !reviewId) return showStatus("Please enter a product ID and review ID.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/hide`, {
+      method: "PUT",
+      headers: { "X-Service-Key": serviceKey }
+    });
+
+    showStatus("Review hidden successfully. Result opened in new tab.", "success");
+    openResultTab("Hide Review", data);
+  }
+
+  async function unhideReview() {
+    const productId = document.getElementById("moderateProductId").value;
+    const reviewId = document.getElementById("moderateReviewId").value;
+    if (!productId || !reviewId) return showStatus("Please enter a product ID and review ID.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/reviews/${encodeURIComponent(reviewId)}/unhide`, {
+      method: "PUT",
+      headers: { "X-Service-Key": serviceKey }
+    });
+
+    showStatus("Review unhidden successfully. Result opened in new tab.", "success");
+    openResultTab("Unhide Review", data);
+  }
+
+  async function getFlaggedReviews() {
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const data = await apiCall(`${BASE_URL}/reviews/flagged`, {
+      headers: { "X-Service-Key": serviceKey }
+    });
+
+    showStatus("Flagged reviews loaded successfully. Result opened in new tab.", "success");
+    openResultTab("Flagged Reviews", data.content || data);
   }
 </script>
 </body>

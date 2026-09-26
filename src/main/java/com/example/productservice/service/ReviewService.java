@@ -55,15 +55,46 @@ public class ReviewService {
 
     public Page<Review> listReviews(Long productId, Pageable pageable) {
         productService.findById(productId.intValue());
-        return reviewRepository.findByProductIdOrderByCreatedAtDesc(productId, pageable);
+        return reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDesc(productId, pageable);
     }
 
     public RatingSummary ratingSummary(Long productId) {
         productService.findById(productId.intValue());
         Double average = reviewRepository.averageRatingForProduct(productId);
-        long count = reviewRepository.countByProductId(productId);
+        long count = reviewRepository.countByProductIdAndHiddenFalse(productId);
         double rounded = average == null ? 0.0 : Math.round(average * 10) / 10.0;
         return new RatingSummary(productId, rounded, count);
+    }
+
+    // Anyone can report a review as inappropriate - the same direct-from-customer trust level as posting one in
+    // the first place, no ownership check the way update/delete have. Flagging never hides anything by itself;
+    // it just surfaces the review in the moderation queue below for an admin to act on.
+    public Review flagReview(Long reviewId, String reason) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ItemNotFoundException("Review not found"));
+        review.setFlagged(true);
+        review.setFlagReason(reason == null || reason.isBlank() ? null : reason);
+        return reviewRepository.save(review);
+    }
+
+    // Admin-only (X-Service-Key, enforced by the default SecurityConfig rule) - not restricted to flagged
+    // reviews only, so an admin can also pre-emptively hide one nobody has reported yet.
+    public Review hideReview(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ItemNotFoundException("Review not found"));
+        review.setHidden(true);
+        return reviewRepository.save(review);
+    }
+
+    public Review unhideReview(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ItemNotFoundException("Review not found"));
+        review.setHidden(false);
+        return reviewRepository.save(review);
+    }
+
+    public Page<Review> getFlaggedReviews(Pageable pageable) {
+        return reviewRepository.findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDesc(pageable);
     }
 
     private void validateRating(int rating) {

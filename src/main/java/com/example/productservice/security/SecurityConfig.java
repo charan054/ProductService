@@ -40,6 +40,10 @@ public class SecurityConfig {
                         // makes - the same direct-from-customer trust level as the public GET catalog endpoints
                         // above, not the X-Service-Key boundary that guards add/updatePrice/updateStock/delete.
                         .requestMatchers("/product/*/reviews", "/product/*/reviews/*", "/product/*/rating-summary").permitAll()
+                        // Flagging (reporting) a review is the same direct-from-customer action as posting one -
+                        // hide/unhide are deliberately NOT listed here, so they fall through to the
+                        // X-Service-Key-authenticated default below (an admin-only moderation decision).
+                        .requestMatchers("/product/*/reviews/*/flag").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // The static dashboard itself - not a catalog change, just the HTML/JS shell. The
                         // mutating buttons on it still hit the X-Service-Key-guarded endpoints above like any
