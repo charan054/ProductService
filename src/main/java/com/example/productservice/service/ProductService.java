@@ -2,11 +2,13 @@ package com.example.productservice.service;
 
 import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.Category;
+import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
 import com.example.productservice.repository.CategoryRepository;
+import com.example.productservice.repository.PriceHistoryRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +24,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,6 +38,8 @@ public class ProductService {
     private ProductRepository productRepository;
     @Autowired
     private CategoryRepository categoryRepository;
+    @Autowired
+    private PriceHistoryRepository priceHistoryRepository;
     public Product save(Product product) {
         if(product.getProductPrice()<=0)
         {
@@ -236,8 +241,26 @@ public class ProductService {
         {
             throw new PriceException("Price must be greater than 0");
         }
+        double oldPrice = product.getProductPrice();
         product.setProductPrice(price);
-        return productRepository.save(product);
+        Product saved = productRepository.save(product);
+        // Only an actual change is worth a history row - a no-op "update" to the same price would otherwise
+        // create noise with nothing to show for it.
+        if (oldPrice != price) {
+            PriceHistory history = new PriceHistory();
+            history.setProductId(id);
+            history.setOldPrice(oldPrice);
+            history.setNewPrice(price);
+            history.setChangedAt(Instant.now());
+            priceHistoryRepository.save(history);
+        }
+        return saved;
+    }
+
+    // Newest first, same convention as every other history/timeline endpoint in this codebase.
+    public List<PriceHistory> getPriceHistory(int id) {
+        findById(id);
+        return priceHistoryRepository.findByProductIdOrderByChangedAtDesc(id);
     }
     public void delete(int id) {
         productRepository.deleteById(id);

@@ -2,11 +2,13 @@ package com.example.productservice.service;
 
 import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.Category;
+import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
 import com.example.productservice.repository.CategoryRepository;
+import com.example.productservice.repository.PriceHistoryRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +39,8 @@ class ProductServiceTest {
     private ProductRepository productRepository;
     @Mock
     private CategoryRepository categoryRepository;
+    @Mock
+    private PriceHistoryRepository priceHistoryRepository;
 
     @InjectMocks
     private ProductService service;
@@ -260,6 +264,57 @@ class ProductServiceTest {
     void updatePriceThrowsWhenProductMissing() {
         when(productRepository.findById(1)).thenReturn(Optional.empty());
         assertThrows(ItemNotFoundException.class, () -> service.updatePrice(1, 5.0));
+    }
+
+    @Test
+    void updatePriceRecordsAHistoryEntryWhenThePriceActuallyChanges() {
+        Product p = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updatePrice(1, 12.99);
+
+        ArgumentCaptor<PriceHistory> captor = ArgumentCaptor.forClass(PriceHistory.class);
+        verify(priceHistoryRepository).save(captor.capture());
+        assertEquals(1, captor.getValue().getProductId());
+        assertEquals(9.99, captor.getValue().getOldPrice());
+        assertEquals(12.99, captor.getValue().getNewPrice());
+    }
+
+    // Setting a product's price to what it already is isn't a change - nothing worth recording happened.
+    @Test
+    void updatePriceRecordsNoHistoryWhenThePriceIsUnchanged() {
+        Product p = stored(1, 9.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updatePrice(1, 9.99);
+
+        verify(priceHistoryRepository, never()).save(any());
+    }
+
+    // ---------- getPriceHistory ----------
+
+    @Test
+    void getPriceHistoryThrowsWhenTheProductDoesNotExist() {
+        when(productRepository.findById(99)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.getPriceHistory(99));
+        verify(priceHistoryRepository, never()).findByProductIdOrderByChangedAtDesc(any());
+    }
+
+    @Test
+    void getPriceHistoryReturnsTheProductsHistoryNewestFirst() {
+        Product p = stored(1, 12.99, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        PriceHistory entry = new PriceHistory();
+        entry.setProductId(1);
+        entry.setOldPrice(9.99);
+        entry.setNewPrice(12.99);
+        when(priceHistoryRepository.findByProductIdOrderByChangedAtDesc(1)).thenReturn(List.of(entry));
+
+        List<PriceHistory> result = service.getPriceHistory(1);
+
+        assertEquals(List.of(entry), result);
     }
 
     // ---------- findByName / findByCategory / findAll ----------

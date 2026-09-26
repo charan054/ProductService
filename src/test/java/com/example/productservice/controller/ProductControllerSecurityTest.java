@@ -100,6 +100,11 @@ class ProductControllerSecurityTest {
         mockMvc.perform(get("/product/related").param("id", "999999")).andExpect(status().isBadRequest());
     }
 
+    @Test
+    void priceHistoryIsPublicButReturns400ForAnUnknownId() throws Exception {
+        mockMvc.perform(get("/product/priceHistory").param("id", "999999")).andExpect(status().isBadRequest());
+    }
+
     private static final MockMultipartFile BULK_IMPORT_CSV = new MockMultipartFile(
             "file", "products.csv", "text/csv",
             "productName,productCategory,productPrice,productStock\nWidget,misc,9.99,10\n".getBytes(StandardCharsets.UTF_8));
