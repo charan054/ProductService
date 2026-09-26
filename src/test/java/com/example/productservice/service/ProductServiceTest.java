@@ -1,9 +1,11 @@
 package com.example.productservice.service;
 
+import com.example.productservice.entity.Category;
 import com.example.productservice.entity.Product;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
+import com.example.productservice.repository.CategoryRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,9 +29,16 @@ class ProductServiceTest {
 
     @Mock
     private ProductRepository productRepository;
+    @Mock
+    private CategoryRepository categoryRepository;
 
     @InjectMocks
     private ProductService service;
+
+    private void stubCategoryLookupCreatesNew() {
+        when(categoryRepository.findByCategoryNameIgnoreCase(any())).thenReturn(Optional.empty());
+        when(categoryRepository.save(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
 
     private Product stored(int id, double price, int stock) {
         Product p = new Product();
@@ -59,10 +68,48 @@ class ProductServiceTest {
 
     @Test
     void saveStoresAValidProduct() {
+        stubCategoryLookupCreatesNew();
         Product p = stored(0, 9.99, 10);
         when(productRepository.save(p)).thenReturn(p);
         Product result = service.save(p);
         assertEquals(9.99, result.getProductPrice());
+    }
+
+    @Test
+    void saveRejectsABlankCategory() {
+        Product p = stored(0, 9.99, 10);
+        p.setProductCategory("  ");
+        assertThrows(IllegalArgumentException.class, () -> service.save(p));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void saveReusesAnExistingCategoryCaseInsensitivelyAndNormalizesCasing() {
+        Category existing = new Category();
+        existing.setCategoryId(1L);
+        existing.setCategoryName("Shampoo");
+        when(categoryRepository.findByCategoryNameIgnoreCase("shampoo")).thenReturn(Optional.of(existing));
+        Product p = stored(0, 9.99, 10);
+        p.setProductCategory("shampoo");
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product result = service.save(p);
+
+        assertEquals("Shampoo", result.getProductCategory());
+        verify(categoryRepository, never()).save(any());
+    }
+
+    @Test
+    void saveCreatesANewCategoryWhenNoneMatches() {
+        stubCategoryLookupCreatesNew();
+        Product p = stored(0, 9.99, 10);
+        p.setProductCategory("Gadgets");
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product result = service.save(p);
+
+        assertEquals("Gadgets", result.getProductCategory());
+        verify(categoryRepository).save(any(Category.class));
     }
 
     // ---------- findById ----------
@@ -141,6 +188,7 @@ class ProductServiceTest {
 
     @Test
     void savedProductGetsTheDefaultThresholdWhenNotSpecified() {
+        stubCategoryLookupCreatesNew();
         Product p = new Product();
         p.setProductName("Widget");
         p.setProductCategory("misc");
@@ -187,5 +235,50 @@ class ProductServiceTest {
         List<Product> lowStock = List.of(stored(1, 9.99, 2));
         when(productRepository.findLowStockProducts()).thenReturn(lowStock);
         assertEquals(lowStock, service.findLowStockProducts());
+    }
+
+    // ---------- categories ----------
+
+    @Test
+    void saveCategoryRejectsABlankName() {
+        Category c = new Category();
+        c.setCategoryName(" ");
+        assertThrows(IllegalArgumentException.class, () -> service.saveCategory(c));
+        verify(categoryRepository, never()).save(any());
+    }
+
+    @Test
+    void saveCategoryCreatesANewOneWhenNoneMatches() {
+        when(categoryRepository.findByCategoryNameIgnoreCase("Gadgets")).thenReturn(Optional.empty());
+        Category input = new Category();
+        input.setCategoryName("Gadgets");
+        when(categoryRepository.save(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Category result = service.saveCategory(input);
+
+        assertEquals("Gadgets", result.getCategoryName());
+    }
+
+    @Test
+    void saveCategoryReturnsTheExistingOneInsteadOfDuplicating() {
+        Category existing = new Category();
+        existing.setCategoryId(1L);
+        existing.setCategoryName("Shampoo");
+        when(categoryRepository.findByCategoryNameIgnoreCase("shampoo")).thenReturn(Optional.of(existing));
+        Category input = new Category();
+        input.setCategoryName("shampoo");
+
+        Category result = service.saveCategory(input);
+
+        assertEquals(existing, result);
+        verify(categoryRepository, never()).save(any());
+    }
+
+    @Test
+    void getCategoriesDelegatesToTheRepository() {
+        Category c = new Category();
+        c.setCategoryName("Shampoo");
+        when(categoryRepository.findAll()).thenReturn(List.of(c));
+        assertEquals(1, service.getCategories().size());
     }
 }

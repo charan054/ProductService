@@ -40,6 +40,22 @@ class ProductControllerSecurityTest {
         mockMvc.perform(get("/product/byCategory").param("category", "misc")).andExpect(status().isOk());
         mockMvc.perform(get("/product/search")).andExpect(status().isOk());
         mockMvc.perform(get("/product/lowStock")).andExpect(status().isOk());
+        mockMvc.perform(get("/category/all")).andExpect(status().isOk());
+    }
+
+    @Test
+    void addCategoryWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(post("/category/add").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryName\":\"Gadgets\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void addCategoryWithValidKeySucceeds() throws Exception {
+        mockMvc.perform(post("/category/add").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryName\":\"Gadgets\"}")
+                        .header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk());
     }
 
     // Regression: the static dashboard was 401ing before Spring Security's static-resource handler ever got to
