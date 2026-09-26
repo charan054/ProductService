@@ -9,7 +9,6 @@ import com.example.productservice.repository.CategoryRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -128,35 +127,51 @@ class ProductServiceTest {
     }
 
     // ---------- updateStock ----------
-    // Regression coverage for a bug where the guard checked the stock BEFORE applying the delta instead of the
-    // resulting value, so it never actually stopped stock from going negative.
+    // updateStock() now delegates the actual arithmetic to a single atomic conditional UPDATE
+    // (ProductRepository.adjustStock) instead of reading the entity, checking the resulting value in Java, and
+    // saving it back - that read-modify-write let two concurrent requests for the last unit both read the same
+    // starting stock and both pass their own guard (a lost-update race). These tests cover the two outcomes
+    // adjustStock can report (0 rows vs 1 row updated) and how updateStock() turns each into the right exception
+    // or result, not the arithmetic itself - that lives in the query, not in Java, on purpose.
 
     @Test
     void updateStockRejectsADeltaThatWouldGoNegative() {
+        when(productRepository.adjustStock(1, -20)).thenReturn(0);
         Product p = stored(1, 9.99, 10);
         when(productRepository.findById(1)).thenReturn(Optional.of(p));
+
         assertThrows(StockException.class, () -> service.updateStock(1, -20));
         verify(productRepository, never()).save(any());
     }
 
     @Test
+    void updateStockThrowsNotFoundWhenTheProductDoesNotExist() {
+        when(productRepository.adjustStock(99, -1)).thenReturn(0);
+        when(productRepository.findById(99)).thenReturn(Optional.empty());
+
+        assertThrows(ItemNotFoundException.class, () -> service.updateStock(99, -1));
+    }
+
+    @Test
     void updateStockAllowsADeltaThatLandsExactlyOnZero() {
-        Product p = stored(1, 9.99, 10);
+        when(productRepository.adjustStock(1, -10)).thenReturn(1);
+        Product p = stored(1, 9.99, 0);
         when(productRepository.findById(1)).thenReturn(Optional.of(p));
-        when(productRepository.save(p)).thenReturn(p);
+
         Product result = service.updateStock(1, -10);
+
         assertEquals(0, result.getProductStock());
     }
 
     @Test
     void updateStockAppliesAPositiveDelta() {
-        Product p = stored(1, 9.99, 10);
+        when(productRepository.adjustStock(1, 5)).thenReturn(1);
+        Product p = stored(1, 9.99, 15);
         when(productRepository.findById(1)).thenReturn(Optional.of(p));
-        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
-        when(productRepository.save(any())).thenReturn(p);
-        service.updateStock(1, 5);
-        verify(productRepository).save(captor.capture());
-        assertEquals(15, captor.getValue().getProductStock());
+
+        Product result = service.updateStock(1, 5);
+
+        assertEquals(15, result.getProductStock());
     }
 
     // ---------- updatePrice ----------

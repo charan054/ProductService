@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
@@ -92,15 +93,20 @@ public class ProductService {
     public void deleteById(int id) {
         productRepository.deleteById(id);
     }
+    // A single atomic conditional UPDATE (see ProductRepository.adjustStock) rather than the previous
+    // read-modify-write, which let two concurrent requests for the last unit both read the same starting stock
+    // and both pass their own "would this go negative" check - a lost-update race that oversold stock under
+    // real concurrency despite this exact guard being present.
+    @Transactional
     public Product updateStock(int id, int stock) {
-        Product product = productRepository.findById(id).orElseThrow( ()-> new ItemNotFoundException("Product not found"));
-        int newStock = product.getProductStock() + stock;
-        if(newStock<0)
-        {
+        int updated = productRepository.adjustStock(id, stock);
+        if (updated == 0) {
+            // Zero rows updated means either the product doesn't exist, or it does but the delta would have
+            // taken stock below zero - re-querying tells the two apart without reintroducing the race above.
+            productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
             throw new StockException("Stock is low");
         }
-        product.setProductStock(newStock);
-        Product saved = productRepository.save(product);
+        Product saved = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
         warnIfLowStock(saved);
         return saved;
     }
