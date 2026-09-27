@@ -343,6 +343,20 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🖼️</div>
+        <div class="title-wrap">
+          <h2>Upload Product Image</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Upload an actual image file for a product (JPEG/PNG/GIF/WEBP, up to 5MB) instead of pasting a URL - replaces that product's Image URL with the uploaded file.</p>
+      <input type="number" id="uploadImageProductId" placeholder="Product ID" />
+      <input type="file" id="uploadImageFile" accept="image/jpeg,image/png,image/gif,image/webp" />
+      <button class="green" onclick="uploadProductImage()">Upload Image</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📋</div>
         <div class="title-wrap">
           <h2>All Products</h2>
@@ -868,6 +882,30 @@
 
     showStatus(`Import finished: ${data.successCount} succeeded, ${data.failureCount} failed. Result opened in new tab.`, "success");
     openResultTab("Bulk Import Result", [data]);
+  }
+
+  async function uploadProductImage() {
+    const productId = document.getElementById("uploadImageProductId").value;
+    const fileInput = document.getElementById("uploadImageFile");
+    const file = fileInput.files[0];
+    if (!productId) return showStatus("Please enter a product ID.", "error");
+    if (!file) return showStatus("Please choose an image file.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // No Content-Type header here - the browser sets multipart/form-data with the correct boundary itself.
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/image`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey },
+      body: formData
+    });
+
+    showStatus("Image uploaded successfully. Result opened in new tab.", "success");
+    openResultTab("Upload Product Image", data);
   }
 
   async function getAllProducts() {
