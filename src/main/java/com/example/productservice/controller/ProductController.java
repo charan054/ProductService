@@ -3,6 +3,7 @@ package com.example.productservice.controller;
 import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
+import com.example.productservice.entity.ProductImage;
 import com.example.productservice.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,25 @@ public class ProductController {
     @PostMapping("/{id}/image")
     public Product uploadProductImage(@PathVariable Integer id, @RequestParam("file") MultipartFile file){
         return productService.uploadProductImage(id, file);
+    }
+    // Same X-Service-Key boundary as the cover-image endpoints above - an admin action, not a customer one.
+    @PostMapping("/{id}/images")
+    public ProductImage addGalleryImageUrl(@PathVariable Integer id, @RequestParam String imageUrl){
+        return productService.addGalleryImageUrl(id, imageUrl);
+    }
+    @PostMapping("/{id}/images/upload")
+    public ProductImage addGalleryImageUpload(@PathVariable Integer id, @RequestParam("file") MultipartFile file){
+        return productService.addGalleryImageUpload(id, file);
+    }
+    // Public, same catalog-browsing trust level as the other product GETs above - a product's gallery photos are
+    // just as visible as its cover image and price.
+    @GetMapping("/{id}/images")
+    public List<ProductImage> getGalleryImages(@PathVariable Integer id){
+        return productService.getGalleryImages(id);
+    }
+    @DeleteMapping("/images/{imageId}")
+    public void removeGalleryImage(@PathVariable Long imageId){
+        productService.removeGalleryImage(imageId);
     }
     @GetMapping("/all")
     public List<Product> getAllProducts(){
@@ -81,6 +101,11 @@ public class ProductController {
     @PutMapping("/updatePrice")
     public Product updateProductPrice(@RequestParam Integer id, @RequestParam Double price){
         return productService.updatePrice(id, price);
+    }
+    // Same X-Service-Key boundary as updatePrice/updateStock above - falls under the default authenticated rule.
+    @PutMapping("/updateImageUrl")
+    public Product updateProductImageUrl(@RequestParam Integer id, @RequestParam String imageUrl){
+        return productService.updateImageUrl(id, imageUrl);
     }
     // Same public trust level as the other catalog-browsing GETs above.
     @GetMapping("/priceHistory")

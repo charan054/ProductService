@@ -4,11 +4,13 @@ import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.Category;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
+import com.example.productservice.entity.ProductImage;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
 import com.example.productservice.repository.CategoryRepository;
 import com.example.productservice.repository.PriceHistoryRepository;
+import com.example.productservice.repository.ProductImageRepository;
 import com.example.productservice.repository.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,8 @@ public class ProductService {
     private CategoryRepository categoryRepository;
     @Autowired
     private PriceHistoryRepository priceHistoryRepository;
+    @Autowired
+    private ProductImageRepository productImageRepository;
     @Value("${app.upload-dir}")
     private String uploadDir;
     public Product save(Product product) {
@@ -240,6 +244,18 @@ public class ProductService {
         }
     }
 
+    // Sets/replaces productImageUrl on an already-existing product by plain URL - the original add-time-only
+    // design (see Product.productImageUrl) had no way to attach or change an image after the fact other than
+    // uploadProductImage's real file upload below.
+    public Product updateImageUrl(int id, String imageUrl) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new IllegalArgumentException("imageUrl must not be blank");
+        }
+        product.setProductImageUrl(imageUrl.trim());
+        return productRepository.save(product);
+    }
+
     private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
 
     // Actual file upload, as opposed to productImageUrl's original plain-URL-only design (see Product.productImageUrl).
@@ -249,6 +265,14 @@ public class ProductService {
     // is a much smaller problem than a delete racing a request still serving the old image.
     public Product uploadProductImage(int id, MultipartFile file) {
         Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        String url = saveUploadedImageFile(file);
+        product.setProductImageUrl(url);
+        return productRepository.save(product);
+    }
+
+    // Shared by uploadProductImage above (the single cover image) and addGalleryImageUpload below (an
+    // additional gallery photo) - both save the same way, just onto different fields/tables.
+    private String saveUploadedImageFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("No file was uploaded");
         }
@@ -275,8 +299,47 @@ public class ProductService {
         // Absolute URL, not a bare "/uploads/xxx" - shop.html (OrderService's origin, a different port) renders
         // this straight into an <img src>, which resolves a relative path against ITS OWN origin, not
         // ProductService's. Cross-origin <img> loading itself needs no CORS config (only fetch/XHR would).
-        product.setProductImageUrl(currentBaseUrl() + "/uploads/" + filename);
-        return productRepository.save(product);
+        return currentBaseUrl() + "/uploads/" + filename;
+    }
+
+    // ---------- Product image gallery (additional photos beyond the single cover Product.productImageUrl) ----------
+
+    public ProductImage addGalleryImageUrl(int id, String imageUrl) {
+        if (!productRepository.existsById(id)) {
+            throw new ItemNotFoundException("Product not found");
+        }
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new IllegalArgumentException("imageUrl must not be blank");
+        }
+        ProductImage image = new ProductImage();
+        image.setProductId(id);
+        image.setImageUrl(imageUrl.trim());
+        return productImageRepository.save(image);
+    }
+
+    public ProductImage addGalleryImageUpload(int id, MultipartFile file) {
+        if (!productRepository.existsById(id)) {
+            throw new ItemNotFoundException("Product not found");
+        }
+        String url = saveUploadedImageFile(file);
+        ProductImage image = new ProductImage();
+        image.setProductId(id);
+        image.setImageUrl(url);
+        return productImageRepository.save(image);
+    }
+
+    public List<ProductImage> getGalleryImages(int id) {
+        return productImageRepository.findByProductIdOrderByIdAsc(id);
+    }
+
+    // Deliberately does NOT delete the underlying uploaded file from disk (if this was a file upload rather than
+    // an external URL) - same "leave the old file, don't race a delete against an in-flight request" reasoning
+    // as uploadProductImage's replace-the-cover-image path above.
+    public void removeGalleryImage(long imageId) {
+        if (!productImageRepository.existsById(imageId)) {
+            throw new ItemNotFoundException("Image not found");
+        }
+        productImageRepository.deleteById(imageId);
     }
 
     // Empty outside a real HTTP request (e.g. a unit test calling this directly) - falls back to the old

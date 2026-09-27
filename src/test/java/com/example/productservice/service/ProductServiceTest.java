@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +42,8 @@ class ProductServiceTest {
     private CategoryRepository categoryRepository;
     @Mock
     private PriceHistoryRepository priceHistoryRepository;
+    @Mock
+    private com.example.productservice.repository.ProductImageRepository productImageRepository;
 
     @InjectMocks
     private ProductService service;
@@ -564,5 +567,94 @@ class ProductServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
 
         assertThrows(ItemNotFoundException.class, () -> service.uploadProductImage(1, file));
+    }
+
+    // ---------- updateImageUrl ----------
+
+    @Test
+    void updateImageUrlSetsTheImageUrlOnAnExistingProduct() {
+        Product existing = stored(1, 10.0, 5);
+        when(productRepository.findById(1)).thenReturn(Optional.of(existing));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product result = service.updateImageUrl(1, "https://example.com/photo.jpg");
+
+        assertEquals("https://example.com/photo.jpg", result.getProductImageUrl());
+    }
+
+    @Test
+    void updateImageUrlRejectsABlankUrl() {
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 10.0, 5)));
+        assertThrows(IllegalArgumentException.class, () -> service.updateImageUrl(1, "  "));
+    }
+
+    @Test
+    void updateImageUrlThrowsForAnUnknownProduct() {
+        when(productRepository.findById(1)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.updateImageUrl(1, "https://example.com/photo.jpg"));
+    }
+
+    // ---------- product image gallery ----------
+
+    @Test
+    void addGalleryImageUrlSavesAnAdditionalPhoto() {
+        when(productRepository.existsById(1)).thenReturn(true);
+        com.example.productservice.entity.ProductImage saved = new com.example.productservice.entity.ProductImage();
+        saved.setProductId(1);
+        saved.setImageUrl("https://example.com/gallery1.jpg");
+        when(productImageRepository.save(any(com.example.productservice.entity.ProductImage.class))).thenReturn(saved);
+
+        com.example.productservice.entity.ProductImage result = service.addGalleryImageUrl(1, "https://example.com/gallery1.jpg");
+
+        assertEquals("https://example.com/gallery1.jpg", result.getImageUrl());
+        assertEquals(1, result.getProductId());
+    }
+
+    @Test
+    void addGalleryImageUrlThrowsForAnUnknownProduct() {
+        when(productRepository.existsById(1)).thenReturn(false);
+        assertThrows(ItemNotFoundException.class, () -> service.addGalleryImageUrl(1, "https://example.com/gallery1.jpg"));
+        verifyNoInteractions(productImageRepository);
+    }
+
+    @Test
+    void addGalleryImageUrlRejectsABlankUrl() {
+        when(productRepository.existsById(1)).thenReturn(true);
+        assertThrows(IllegalArgumentException.class, () -> service.addGalleryImageUrl(1, " "));
+    }
+
+    @Test
+    void getGalleryImagesDelegatesToTheRepository() {
+        com.example.productservice.entity.ProductImage image = new com.example.productservice.entity.ProductImage();
+        when(productImageRepository.findByProductIdOrderByIdAsc(1)).thenReturn(java.util.List.of(image));
+
+        assertEquals(1, service.getGalleryImages(1).size());
+    }
+
+    @Test
+    void removeGalleryImageDeletesAnExistingImage() {
+        when(productImageRepository.existsById(5L)).thenReturn(true);
+        service.removeGalleryImage(5L);
+        verify(productImageRepository).deleteById(5L);
+    }
+
+    @Test
+    void removeGalleryImageThrowsForAnUnknownImage() {
+        when(productImageRepository.existsById(5L)).thenReturn(false);
+        assertThrows(ItemNotFoundException.class, () -> service.removeGalleryImage(5L));
+        verify(productImageRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void addGalleryImageUploadSavesTheUploadedFileAsAGalleryPhoto() {
+        useTempUploadDir();
+        when(productRepository.existsById(1)).thenReturn(true);
+        when(productImageRepository.save(any(com.example.productservice.entity.ProductImage.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1, 2, 3});
+
+        com.example.productservice.entity.ProductImage result = service.addGalleryImageUpload(1, file);
+
+        org.junit.jupiter.api.Assertions.assertTrue(result.getImageUrl().contains("/uploads/"));
     }
 }
