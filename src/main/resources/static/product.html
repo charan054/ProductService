@@ -357,6 +357,24 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🖼️</div>
+        <div class="title-wrap">
+          <h2>Product Image Gallery</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Additional photos beyond the single cover Image URL/upload above - shown in the storefront's product-details modal. Add by URL or file, view the gallery, or remove a photo by its image ID.</p>
+      <input type="number" id="galleryProductId" placeholder="Product ID" />
+      <input type="text" id="galleryImageUrl" placeholder="Image URL (optional if uploading a file)" />
+      <input type="file" id="galleryImageFile" accept="image/jpeg,image/png,image/gif,image/webp" />
+      <button class="green" onclick="addGalleryImage()">Add To Gallery</button>
+      <button onclick="viewGalleryImages()">View Gallery</button>
+      <input type="number" id="removeGalleryImageId" placeholder="Image ID to remove" />
+      <button class="red-btn" onclick="removeGalleryImage()">Remove Image</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📋</div>
         <div class="title-wrap">
           <h2>All Products</h2>
@@ -906,6 +924,60 @@
 
     showStatus("Image uploaded successfully. Result opened in new tab.", "success");
     openResultTab("Upload Product Image", data);
+  }
+
+  async function addGalleryImage() {
+    const productId = document.getElementById("galleryProductId").value;
+    const imageUrl = document.getElementById("galleryImageUrl").value.trim();
+    const fileInput = document.getElementById("galleryImageFile");
+    const file = fileInput.files[0];
+    if (!productId) return showStatus("Please enter a product ID.", "error");
+    if (!imageUrl && !file) return showStatus("Enter an image URL or choose a file to upload.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    let data;
+    if (file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/images/upload`, {
+        method: "POST",
+        headers: { "X-Service-Key": serviceKey },
+        body: formData
+      });
+    } else {
+      data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/images?imageUrl=${encodeURIComponent(imageUrl)}`, {
+        method: "POST",
+        headers: { "X-Service-Key": serviceKey }
+      });
+    }
+
+    showStatus("Gallery image added successfully. Result opened in new tab.", "success");
+    openResultTab("Add Gallery Image", data);
+  }
+
+  async function viewGalleryImages() {
+    const productId = document.getElementById("galleryProductId").value;
+    if (!productId) return showStatus("Please enter a product ID.", "error");
+
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/images`);
+    showStatus("Gallery images loaded successfully. Result opened in new tab.", "success");
+    openResultTab("Product Image Gallery", data);
+  }
+
+  async function removeGalleryImage() {
+    const imageId = document.getElementById("removeGalleryImageId").value;
+    if (!imageId) return showStatus("Please enter an image ID to remove.", "error");
+
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+
+    await apiCall(`${BASE_URL}/images/${encodeURIComponent(imageId)}`, {
+      method: "DELETE",
+      headers: { "X-Service-Key": serviceKey }
+    });
+    showStatus("Gallery image removed successfully.", "success");
   }
 
   async function getAllProducts() {

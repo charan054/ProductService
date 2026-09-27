@@ -52,6 +52,10 @@ public class SecurityConfig {
                         // trust level as the public product GETs above. Uploading a NEW one still requires
                         // X-Service-Key (POST /product/{id}/image falls through to the default authenticated rule).
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                        // A product's gallery photos (see ProductController.getGalleryImages) are just as
+                        // visible as its cover image - same catalog-browsing trust level. Adding/removing one is
+                        // still X-Service-Key gated (falls through to the default authenticated rule).
+                        .requestMatchers(HttpMethod.GET, "/product/*/images").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // The static dashboard itself - not a catalog change, just the HTML/JS shell. The
                         // mutating buttons on it still hit the X-Service-Key-guarded endpoints above like any
