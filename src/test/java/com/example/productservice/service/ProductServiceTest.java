@@ -506,4 +506,63 @@ class ProductServiceTest {
         assertEquals(1, result.successCount());
         assertEquals(0, result.failureCount());
     }
+
+    // ---------- uploadProductImage ----------
+
+    // CleanupMode.NEVER: JUnit's default post-test cleanup of a @TempDir intermittently throws
+    // AccessDeniedException on Windows (a known JUnit5/Windows file-locking quirk, unrelated to this code) -
+    // leaving a few empty temp dirs behind under the OS temp folder is a fine trade for not failing every test
+    // in this class.
+    @org.junit.jupiter.api.io.TempDir(cleanup = org.junit.jupiter.api.io.CleanupMode.NEVER)
+    java.nio.file.Path tempUploadDir;
+
+    private void useTempUploadDir() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "uploadDir", tempUploadDir.toString());
+    }
+
+    @Test
+    void uploadProductImageSavesFileAndSetsImageUrl() throws Exception {
+        useTempUploadDir();
+        Product existing = stored(1, 10.0, 5);
+        when(productRepository.findById(1)).thenReturn(Optional.of(existing));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1, 2, 3});
+
+        Product result = service.uploadProductImage(1, file);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getProductImageUrl());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getProductImageUrl().startsWith("/uploads/"));
+        org.junit.jupiter.api.Assertions.assertTrue(result.getProductImageUrl().endsWith(".png"));
+        try (var files = java.nio.file.Files.list(tempUploadDir)) {
+            assertEquals(1, files.count());
+        }
+    }
+
+    @Test
+    void uploadProductImageRejectsANonImageContentType() {
+        useTempUploadDir();
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 10.0, 5)));
+        MockMultipartFile file = new MockMultipartFile("file", "malware.exe", "application/octet-stream", new byte[]{1});
+
+        assertThrows(IllegalArgumentException.class, () -> service.uploadProductImage(1, file));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void uploadProductImageRejectsAnEmptyFile() {
+        useTempUploadDir();
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 10.0, 5)));
+        MockMultipartFile file = new MockMultipartFile("file", "empty.png", "image/png", new byte[0]);
+
+        assertThrows(IllegalArgumentException.class, () -> service.uploadProductImage(1, file));
+    }
+
+    @Test
+    void uploadProductImageThrowsForAnUnknownProduct() {
+        useTempUploadDir();
+        when(productRepository.findById(1)).thenReturn(Optional.empty());
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
+
+        assertThrows(ItemNotFoundException.class, () -> service.uploadProductImage(1, file));
+    }
 }

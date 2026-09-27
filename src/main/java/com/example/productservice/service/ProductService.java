@@ -13,6 +13,7 @@ import com.example.productservice.repository.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ProductService {
@@ -40,6 +42,8 @@ public class ProductService {
     private CategoryRepository categoryRepository;
     @Autowired
     private PriceHistoryRepository priceHistoryRepository;
+    @Value("${app.upload-dir}")
+    private String uploadDir;
     public Product save(Product product) {
         if(product.getProductPrice()<=0)
         {
@@ -233,6 +237,57 @@ public class ProductService {
         if (product.getProductStock() <= product.getLowStockThreshold()) {
             log.warn("Low stock alert: product {} ({}) has {} unit(s) left, at or below its threshold of {}",
                     product.getProductId(), product.getProductName(), product.getProductStock(), product.getLowStockThreshold());
+        }
+    }
+
+    private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
+
+    // Actual file upload, as opposed to productImageUrl's original plain-URL-only design (see Product.productImageUrl).
+    // Saved to a filesystem directory (app.upload-dir, see WebConfig) named by a random UUID rather than the
+    // original filename - avoids both a path-traversal filename and two different products' uploads colliding on
+    // the same name. The old file (if any) is deliberately left on disk rather than deleted - a stale orphan file
+    // is a much smaller problem than a delete racing a request still serving the old image.
+    public Product uploadProductImage(int id, MultipartFile file) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("No file was uploaded");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_IMAGE_CONTENT_TYPES.contains(contentType)) {
+            throw new IllegalArgumentException("Only JPEG, PNG, GIF or WEBP images are allowed");
+        }
+
+        String extension = switch (contentType) {
+            case "image/jpeg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/gif" -> ".gif";
+            default -> ".webp";
+        };
+        String filename = java.util.UUID.randomUUID() + extension;
+        try {
+            java.nio.file.Path targetDir = java.nio.file.Paths.get(uploadDir);
+            java.nio.file.Files.createDirectories(targetDir);
+            file.transferTo(targetDir.resolve(filename));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Could not save the uploaded image: " + e.getMessage());
+        }
+
+        // Absolute URL, not a bare "/uploads/xxx" - shop.html (OrderService's origin, a different port) renders
+        // this straight into an <img src>, which resolves a relative path against ITS OWN origin, not
+        // ProductService's. Cross-origin <img> loading itself needs no CORS config (only fetch/XHR would).
+        product.setProductImageUrl(currentBaseUrl() + "/uploads/" + filename);
+        return productRepository.save(product);
+    }
+
+    // Empty outside a real HTTP request (e.g. a unit test calling this directly) - falls back to the old
+    // relative-path behavior rather than throwing, since ServletUriComponentsBuilder needs RequestContextHolder
+    // state that only exists during an actual request.
+    private String currentBaseUrl() {
+        try {
+            return org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
+                    .build().toUriString();
+        } catch (IllegalStateException e) {
+            return "";
         }
     }
     public Product updatePrice(int id, double price) {

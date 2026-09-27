@@ -47,6 +47,11 @@ public class SecurityConfig {
                         // A count, not any one review's content - same customer-generated-content trust level as
                         // browsing reviews above. Called by OrderService (via Feign) for its customer profile.
                         .requestMatchers(HttpMethod.GET, "/product/reviews/count").permitAll()
+                        // The uploaded image files themselves (see ProductController.uploadProductImage /
+                        // WebConfig) - a product photo needs to be viewable by anyone browsing the catalog, same
+                        // trust level as the public product GETs above. Uploading a NEW one still requires
+                        // X-Service-Key (POST /product/{id}/image falls through to the default authenticated rule).
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // The static dashboard itself - not a catalog change, just the HTML/JS shell. The
                         // mutating buttons on it still hit the X-Service-Key-guarded endpoints above like any

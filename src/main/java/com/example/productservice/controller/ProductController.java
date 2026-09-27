@@ -33,6 +33,13 @@ public class ProductController {
     public BulkImportResult bulkImportProducts(@RequestParam("file") MultipartFile file){
         return productService.bulkImportProducts(file);
     }
+    // Same X-Service-Key boundary as add/bulkImport above - falls under the default authenticated rule, no
+    // SecurityConfig changes needed. The saved file itself is served back out publicly at /uploads/** (see
+    // WebConfig/SecurityConfig) since a product image needs to be viewable by anyone browsing the catalog.
+    @PostMapping("/{id}/image")
+    public Product uploadProductImage(@PathVariable Integer id, @RequestParam("file") MultipartFile file){
+        return productService.uploadProductImage(id, file);
+    }
     @GetMapping("/all")
     public List<Product> getAllProducts(){
         return productService.findAll();

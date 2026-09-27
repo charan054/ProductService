@@ -5,6 +5,9 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Runtime destination for POST /product/{id}/image uploads (see app.upload-dir) - user content, not source.
+/uploads/
+
 ### STS ###
 .apt_generated
 .classpath
