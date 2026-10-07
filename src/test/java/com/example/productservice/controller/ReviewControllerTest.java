@@ -33,6 +33,8 @@ class ReviewControllerTest {
     @Autowired
     private ReviewRepository reviewRepository;
 
+    private static final String VALID_KEY = "test-service-key"; // matches application-test.properties
+
     private Long productId;
 
     @BeforeEach
@@ -148,6 +150,33 @@ class ReviewControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].reviewerName").value("Bob"));
+    }
+
+    @Test
+    void publicListDoesNotExposeReviewerPhone() throws Exception {
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                .content(reviewJson("Alice", 1111111111L, 4, "Nice")));
+
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].reviewerName").value("Alice"))
+                .andExpect(jsonPath("$.content[0].reviewerPhno").doesNotExist());
+    }
+
+    @Test
+    void internalListWithoutServiceKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(get("/product/internal/" + productId + "/reviews"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void internalListWithServiceKeyIncludesReviewerPhone() throws Exception {
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                .content(reviewJson("Alice", 1111111111L, 4, "Nice")));
+
+        mockMvc.perform(get("/product/internal/" + productId + "/reviews").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].reviewerPhno").value(1111111111L));
     }
 
     private long addReview(String name, long phno, int rating, String comment) throws Exception {

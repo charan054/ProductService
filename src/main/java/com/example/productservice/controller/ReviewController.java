@@ -1,5 +1,6 @@
 package com.example.productservice.controller;
 
+import com.example.productservice.dto.PublicReview;
 import com.example.productservice.dto.RatingSummary;
 import com.example.productservice.entity.Review;
 import com.example.productservice.service.ReviewService;
@@ -31,9 +32,18 @@ public class ReviewController {
     }
 
     @GetMapping("/{productId}/reviews")
-    public Page<Review> getReviews(@PathVariable Long productId,
-                                    @RequestParam(defaultValue = "0") int page,
-                                    @RequestParam(defaultValue = "20") int size) {
+    public Page<PublicReview> getReviews(@PathVariable Long productId,
+                                          @RequestParam(defaultValue = "0") int page,
+                                          @RequestParam(defaultValue = "20") int size) {
+        return reviewService.listReviews(productId, PageRequest.of(page, size)).map(PublicReview::from);
+    }
+
+    // Full reviews including reviewerPhno, X-Service-Key only (the path has 4 segments so none of the public
+    // "/product/*/reviews" matchers apply). OrderService uses it to compute the Verified-purchase badge.
+    @GetMapping("/internal/{productId}/reviews")
+    public Page<Review> getReviewsInternal(@PathVariable Long productId,
+                                           @RequestParam(defaultValue = "0") int page,
+                                           @RequestParam(defaultValue = "20") int size) {
         return reviewService.listReviews(productId, PageRequest.of(page, size));
     }
 
