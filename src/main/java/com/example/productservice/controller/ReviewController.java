@@ -54,8 +54,8 @@ public class ReviewController {
 
     // Public, same trust level as posting a review - reporting one is a customer action, not an admin decision.
     @PostMapping("/{productId}/reviews/{reviewId}/flag")
-    public Review flagReview(@PathVariable Long reviewId, @RequestParam(required = false) String reason) {
-        return reviewService.flagReview(reviewId, reason);
+    public PublicReview flagReview(@PathVariable Long reviewId, @RequestParam(required = false) String reason) {
+        return PublicReview.from(reviewService.flagReview(reviewId, reason));
     }
 
     // Admin-only (falls under the default X-Service-Key-authenticated rule - no path here matches any of the

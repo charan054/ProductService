@@ -193,7 +193,8 @@ class ReviewControllerTest {
         mockMvc.perform(post("/product/" + productId + "/reviews/" + reviewId + "/flag").param("reason", "Spam"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.flagged").value(true))
-                .andExpect(jsonPath("$.flagReason").value("Spam"));
+                .andExpect(jsonPath("$.flagReason").value("Spam"))
+                .andExpect(jsonPath("$.reviewerPhno").doesNotExist());
     }
 
     @Test
