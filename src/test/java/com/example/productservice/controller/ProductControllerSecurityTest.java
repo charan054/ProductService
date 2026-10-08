@@ -96,6 +96,12 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void updateVariantWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(put("/product/updateVariant").param("id", "1").param("variantGroup", "dove").param("variantLabel", "340 ml"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void updateStockWithoutKeyIsUnauthorized() throws Exception {
         mockMvc.perform(put("/product/updateStock").param("id", "1").param("stock", "5"))
                 .andExpect(status().isUnauthorized());

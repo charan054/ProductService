@@ -39,5 +39,14 @@ public class Product {
     // Optional HSN code (4-8 digits) printed on the invoice next to the product.
     @Column(length = 8)
     private String hsnCode;
+    // Options of one product (sizes, packs, colours): each option is a product row of its own - its own price, stock,
+    // GST rate, image and id, so cart, stock and invoices need no special handling - and the rows that are options of
+    // the same thing share a variantGroup key (a lowercase slug). variantLabel is what tells them apart ("500 g").
+    // Both null = an ordinary product. The product NAME should still say which option it is ("Dove Shampoo - 340 ml"),
+    // since that is what a cart line or invoice shows.
+    @Column(length = 64)
+    private String variantGroup;
+    @Column(length = 40)
+    private String variantLabel;
 
 }

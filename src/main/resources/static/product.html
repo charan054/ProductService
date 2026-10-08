@@ -313,6 +313,8 @@
             <th>Stock</th>
             <th>GST %</th>
             <th>HSN</th>
+            <th>Option group</th>
+            <th>Option label</th>
           </tr>
           </thead>
           <tbody>
@@ -324,6 +326,8 @@
             <td><input type="number" id="addStock" placeholder="10" /></td>
             <td><select id="addGstRate"><option value="">Store default</option><option>0</option><option>0.25</option><option>3</option><option>5</option><option>12</option><option>18</option><option>28</option></select></td>
             <td><input type="text" id="addHsnCode" maxlength="8" placeholder="optional" /></td>
+            <td><input type="text" id="addVariantGroup" maxlength="63" placeholder="optional" /></td>
+            <td><input type="text" id="addVariantLabel" maxlength="40" placeholder="optional" /></td>
           </tr>
           </tbody>
         </table>
@@ -340,7 +344,7 @@
           <span class="method">POST</span>
         </div>
       </div>
-      <p>Header row must include productName, productCategory, productPrice, productStock (productImageUrl, lowStockThreshold, gstRate and hsnCode are optional). One bad row does not stop the rest.</p>
+      <p>Header row must include productName, productCategory, productPrice, productStock (productImageUrl, lowStockThreshold, gstRate, hsnCode, variantGroup and variantLabel are optional). One bad row does not stop the rest.</p>
       <input type="file" id="bulkImportFile" accept=".csv" />
       <button class="green" onclick="bulkImportProducts()">Upload CSV</button>
     </div>
@@ -358,6 +362,21 @@
       <select id="taxGstRate"><option value="">Store default</option><option>0</option><option>0.25</option><option>3</option><option>5</option><option>12</option><option>18</option><option>28</option></select>
       <input type="text" id="taxHsnCode" maxlength="8" placeholder="HSN code (blank = keep, '-' = clear)" />
       <button class="green" onclick="updateProductTax()">Save GST</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🎛️</div>
+        <div class="title-wrap">
+          <h2>Product Options (variants)</h2>
+          <span class="method">PUT</span>
+        </div>
+      </div>
+      <p>Sizes, packs or colours of one thing. Make each option its own product (its own price, stock and GST), then give them the same <strong>group</strong> and a different <strong>label</strong>: the shop shows them as one product with an option picker. Put the option in the product name too (e.g. "Dove Shampoo - 340 ml"), since that is what a cart line and invoice show. Leave both boxes empty to turn a product back into an ordinary one.</p>
+      <input type="number" id="variantProductId" placeholder="Product ID" />
+      <input type="text" id="variantGroup" maxlength="63" placeholder="Group, e.g. dove-shampoo (same for every option)" />
+      <input type="text" id="variantLabel" maxlength="40" placeholder="Label, e.g. 340 ml (different for each option)" />
+      <button class="green" onclick="updateProductVariant()">Save Option</button>
     </div>
 
     <div class="card">
@@ -886,7 +905,9 @@
       productPrice: Number(price),
       productStock: Number(stock),
       gstRate: document.getElementById("addGstRate").value === "" ? null : Number(document.getElementById("addGstRate").value),
-      hsnCode: document.getElementById("addHsnCode").value.trim() || null
+      hsnCode: document.getElementById("addHsnCode").value.trim() || null,
+      variantGroup: document.getElementById("addVariantGroup").value.trim() || null,
+      variantLabel: document.getElementById("addVariantLabel").value.trim() || null
     };
 
     const data = await apiCall(`${BASE_URL}/add`, {
@@ -899,6 +920,19 @@
     });
     showStatus("Product added successfully. Result opened in new tab.", "success");
     openResultTab("Add Product", data);
+  }
+
+  async function updateProductVariant() {
+    const id = document.getElementById("variantProductId").value.trim();
+    if (!id) return showStatus("Please enter a product ID.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const params = new URLSearchParams({ id });
+    params.set("variantGroup", document.getElementById("variantGroup").value.trim());
+    params.set("variantLabel", document.getElementById("variantLabel").value.trim());
+    const data = await apiCall(`${BASE_URL}/updateVariant?${params}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
+    showStatus(data.variantGroup ? `Product ${id} is now option "${data.variantLabel}" of ${data.variantGroup}.` : `Product ${id} is an ordinary product.`, "success");
+    openResultTab("Product Option", data);
   }
 
   async function updateProductTax() {
