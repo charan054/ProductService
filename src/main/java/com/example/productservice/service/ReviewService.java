@@ -1,6 +1,7 @@
 package com.example.productservice.service;
 
 import com.example.productservice.dto.RatingSummary;
+import com.example.productservice.entity.Product;
 import com.example.productservice.entity.Review;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.ReviewException;
@@ -9,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class ReviewService {
@@ -53,17 +56,41 @@ public class ReviewService {
         reviewRepository.delete(review);
     }
 
+    // A product that is one option of a variant group shows the reviews of the WHOLE group (every review row still
+    // belongs to the option that was bought - productId on it says which). An ordinary product just shows its own.
     public Page<Review> listReviews(Long productId, Pageable pageable) {
-        productService.findById(productId.intValue());
+        List<Long> ids = reviewedProductIds(productId);
+        if (ids.size() > 1) {
+            return reviewRepository.findByProductIdInAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(ids, pageable);
+        }
         return reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(productId, pageable);
     }
 
+    // Same roll-up for the star rating: the average and count are over the whole group when there is one.
     public RatingSummary ratingSummary(Long productId) {
-        productService.findById(productId.intValue());
-        Double average = reviewRepository.averageRatingForProduct(productId);
-        long count = reviewRepository.countByProductIdAndHiddenFalse(productId);
+        List<Long> ids = reviewedProductIds(productId);
+        Double average;
+        long count;
+        if (ids.size() > 1) {
+            average = reviewRepository.averageRatingForProducts(ids);
+            count = reviewRepository.countByProductIdInAndHiddenFalse(ids);
+        } else {
+            average = reviewRepository.averageRatingForProduct(productId);
+            count = reviewRepository.countByProductIdAndHiddenFalse(productId);
+        }
         double rounded = average == null ? 0.0 : Math.round(average * 10) / 10.0;
         return new RatingSummary(productId, rounded, count);
+    }
+
+    // The product itself plus its variant-group siblings (just itself when it is not in a group). 404s for an unknown id.
+    private List<Long> reviewedProductIds(Long productId) {
+        Product product = productService.findById(productId.intValue());
+        if (product == null || product.getVariantGroup() == null) {
+            return List.of(productId);
+        }
+        List<Long> ids = productService.findVariantGroupMembers(product.getVariantGroup()).stream()
+                .map(Product::getProductId).toList();
+        return ids.isEmpty() ? List.of(productId) : ids;
     }
 
     // Anyone can report a review as inappropriate - the same direct-from-customer trust level as posting one in

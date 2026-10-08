@@ -217,4 +217,54 @@ class ReviewServiceTest {
 
         assertEquals(1, result.getTotalElements());
     }
+
+    // ---------- variant groups share their reviews ----------
+
+    private Product option(long id, String group) {
+        Product p = product(id);
+        p.setVariantGroup(group);
+        p.setVariantLabel("opt" + id);
+        return p;
+    }
+
+    @Test
+    void ratingSummaryOfAnOptionCoversTheWholeGroup() {
+        when(productService.findById(2)).thenReturn(option(2, "dove"));
+        when(productService.findVariantGroupMembers("dove")).thenReturn(List.of(option(1, "dove"), option(2, "dove"), option(3, "dove")));
+        when(reviewRepository.averageRatingForProducts(List.of(1L, 2L, 3L))).thenReturn(4.0);
+        when(reviewRepository.countByProductIdInAndHiddenFalse(List.of(1L, 2L, 3L))).thenReturn(6L);
+
+        var summary = service.ratingSummary(2L);
+
+        assertEquals(2L, summary.productId());
+        assertEquals(4.0, summary.averageRating());
+        assertEquals(6L, summary.reviewCount());
+        verify(reviewRepository, never()).averageRatingForProduct(any());
+    }
+
+    @Test
+    void reviewListOfAnOptionIncludesEverySiblingsReviews() {
+        when(productService.findById(1)).thenReturn(option(1, "dove"));
+        when(productService.findVariantGroupMembers("dove")).thenReturn(List.of(option(1, "dove"), option(2, "dove")));
+        var page = new org.springframework.data.domain.PageImpl<>(List.of(review(10, 2, 9000000001L, 5)));
+        when(reviewRepository.findByProductIdInAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(
+                org.mockito.ArgumentMatchers.eq(List.of(1L, 2L)), any())).thenReturn(page);
+
+        var result = service.listReviews(1L, PageRequest.of(0, 20));
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals(2L, result.getContent().get(0).getProductId());
+    }
+
+    @Test
+    void aProductOutsideAnyGroupStillUsesItsOwnReviewsOnly() {
+        when(productService.findById(1)).thenReturn(product(1));
+        when(reviewRepository.averageRatingForProduct(1L)).thenReturn(3.0);
+        when(reviewRepository.countByProductIdAndHiddenFalse(1L)).thenReturn(2L);
+
+        var summary = service.ratingSummary(1L);
+
+        assertEquals(3.0, summary.averageRating());
+        verify(reviewRepository, never()).averageRatingForProducts(any());
+    }
 }

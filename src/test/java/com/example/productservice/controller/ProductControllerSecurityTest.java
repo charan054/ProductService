@@ -119,6 +119,12 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void addOptionWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(post("/product/1/addOption").param("variantLabel", "650 ml").param("stock", "5"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void relatedProductsIsPublicButReturns400ForAnUnknownId() throws Exception {
         mockMvc.perform(get("/product/related").param("id", "999999")).andExpect(status().isBadRequest());
     }

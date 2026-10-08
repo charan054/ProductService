@@ -530,6 +530,24 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🧩</div>
+        <div class="title-wrap">
+          <h2>Add Another Option</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>Copies a product into a new option of its group (a size, pack or colour): same category, image, GST and HSN, with its own label, price and stock. If the product is not in a group yet, also say what ITS option is called. The options share one rating and one set of reviews on the storefront. Needs the Service Key.</p>
+      <input type="number" id="optSourceId" placeholder="Product ID to copy" />
+      <input type="text" id="optSourceLabel" placeholder="This product's own option label (only if it has no group yet), e.g. 340 ml" maxlength="40" />
+      <input type="text" id="optLabel" placeholder="New option label, e.g. 650 ml" maxlength="40" />
+      <input type="text" id="optName" placeholder="New product name (optional), e.g. Dove Shampoo - 650 ml" />
+      <input type="number" id="optPrice" placeholder="New price (optional, defaults to the same)" step="0.01" />
+      <input type="number" id="optStock" placeholder="Stock of the new option" min="1" />
+      <button onclick="addOption()">Add option</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📒</div>
         <div class="title-wrap">
           <h2>Stock Ledger</h2>
@@ -1162,6 +1180,28 @@
     const data = await apiCall(`${BASE_URL}/priceHistory?id=${encodeURIComponent(id)}`);
     showStatus("Price history loaded successfully. Result opened in new tab.", "success");
     openResultTab("Price History", data);
+  }
+
+  async function addOption() {
+    const id = document.getElementById("optSourceId").value;
+    const label = document.getElementById("optLabel").value.trim();
+    const stock = document.getElementById("optStock").value;
+    if (!id || !label || !stock) return showStatus("Enter the product ID, the new option's label and its stock.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const params = new URLSearchParams({ variantLabel: label, stock });
+    const sourceLabel = document.getElementById("optSourceLabel").value.trim();
+    const name = document.getElementById("optName").value.trim();
+    const price = document.getElementById("optPrice").value;
+    if (sourceLabel) params.set("sourceLabel", sourceLabel);
+    if (name) params.set("productName", name);
+    if (price) params.set("productPrice", price);
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(id)}/addOption?${params}`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey }
+    });
+    showStatus("Option added. Result opened in new tab.", "success");
+    openResultTab("Add Another Option", data);
   }
 
   function ledgerQuery(extra) {
