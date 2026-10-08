@@ -61,6 +61,8 @@ public class ProductService {
         {
             throw new StockException("lowStockThreshold must not be negative");
         }
+        validateGstRate(product.getGstRate());
+        product.setHsnCode(normalizeHsnCode(product.getHsnCode()));
         product.setProductCategory(resolveCategory(product.getProductCategory()));
         Product saved = productRepository.save(product);
         warnIfLowStock(saved);
@@ -111,6 +113,13 @@ public class ProductService {
                     if (columnIndex.containsKey("productImageUrl")) {
                         String imageUrl = cell(values, columnIndex, "productImageUrl").trim();
                         product.setProductImageUrl(imageUrl.isBlank() ? null : imageUrl);
+                    }
+                    if (columnIndex.containsKey("gstRate")) {
+                        String rate = cell(values, columnIndex, "gstRate").trim();
+                        product.setGstRate(rate.isBlank() ? null : Double.parseDouble(rate));
+                    }
+                    if (columnIndex.containsKey("hsnCode")) {
+                        product.setHsnCode(cell(values, columnIndex, "hsnCode").trim());
                     }
                     if (columnIndex.containsKey("lowStockThreshold")) {
                         String threshold = cell(values, columnIndex, "lowStockThreshold").trim();
@@ -254,6 +263,38 @@ public class ProductService {
         }
         product.setProductImageUrl(imageUrl.trim());
         return productRepository.save(product);
+    }
+
+    // The GST slabs in use in India (percent). Anything else is almost certainly a typo.
+    static final Set<Double> GST_RATES = Set.of(0.0, 0.25, 3.0, 5.0, 12.0, 18.0, 28.0);
+
+    // Sets (or clears, with gstRate null) a product's GST rate and HSN code. hsnCode null leaves it unchanged; blank
+    // clears it.
+    public Product updateTax(int id, Double gstRate, String hsnCode) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        validateGstRate(gstRate);
+        product.setGstRate(gstRate);
+        if (hsnCode != null) {
+            product.setHsnCode(normalizeHsnCode(hsnCode));
+        }
+        return productRepository.save(product);
+    }
+
+    private static void validateGstRate(Double gstRate) {
+        if (gstRate != null && !GST_RATES.contains(gstRate)) {
+            throw new IllegalArgumentException("gstRate must be one of 0, 0.25, 3, 5, 12, 18 or 28 (percent)");
+        }
+    }
+
+    private static String normalizeHsnCode(String hsnCode) {
+        if (hsnCode == null || hsnCode.isBlank()) {
+            return null;
+        }
+        String code = hsnCode.trim();
+        if (!code.matches("\\d{4,8}")) {
+            throw new IllegalArgumentException("hsnCode must be 4 to 8 digits");
+        }
+        return code;
     }
 
     private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
