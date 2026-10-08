@@ -90,6 +90,12 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void updateTaxWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(put("/product/updateTax").param("id", "1").param("gstRate", "18"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void updateStockWithoutKeyIsUnauthorized() throws Exception {
         mockMvc.perform(put("/product/updateStock").param("id", "1").param("stock", "5"))
                 .andExpect(status().isUnauthorized());

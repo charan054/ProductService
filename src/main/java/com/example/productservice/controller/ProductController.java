@@ -107,6 +107,12 @@ public class ProductController {
     public Product updateProductImageUrl(@RequestParam Integer id, @RequestParam String imageUrl){
         return productService.updateImageUrl(id, imageUrl);
     }
+    // Same X-Service-Key boundary as updateImageUrl above. gstRate omitted = clear it (use the store default).
+    @PutMapping("/updateTax")
+    public Product updateProductTax(@RequestParam Integer id, @RequestParam(required = false) Double gstRate,
+                                    @RequestParam(required = false) String hsnCode){
+        return productService.updateTax(id, gstRate, hsnCode);
+    }
     // Same public trust level as the other catalog-browsing GETs above.
     @GetMapping("/priceHistory")
     public List<PriceHistory> getPriceHistory(@RequestParam Integer id){

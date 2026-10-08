@@ -33,5 +33,11 @@ public class Product {
     // Alerts fire (see ProductService.updateStock/save) when stock drops to or below this. Defaults to 5 when a
     // caller doesn't set it explicitly.
     private int lowStockThreshold = 5;
+    // GST rate in percent, one of the standard slabs (see ProductService.GST_RATES). Catalog prices INCLUDE GST; this
+    // only says how much of the price is tax, for the invoice. Null = the store's default rate (OrderService decides).
+    private Double gstRate;
+    // Optional HSN code (4-8 digits) printed on the invoice next to the product.
+    @Column(length = 8)
+    private String hsnCode;
 
 }

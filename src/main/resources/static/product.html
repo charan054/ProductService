@@ -309,8 +309,10 @@
             <th>Product Name</th>
             <th>Category</th>
             <th>Image URL</th>
-            <th>Price</th>
+            <th>Price (incl. GST)</th>
             <th>Stock</th>
+            <th>GST %</th>
+            <th>HSN</th>
           </tr>
           </thead>
           <tbody>
@@ -320,6 +322,8 @@
             <td><input type="text" id="addImageUrl" placeholder="https://... (optional)" /></td>
             <td><input type="number" id="addPrice" placeholder="75000" /></td>
             <td><input type="number" id="addStock" placeholder="10" /></td>
+            <td><select id="addGstRate"><option value="">Store default</option><option>0</option><option>0.25</option><option>3</option><option>5</option><option>12</option><option>18</option><option>28</option></select></td>
+            <td><input type="text" id="addHsnCode" maxlength="8" placeholder="optional" /></td>
           </tr>
           </tbody>
         </table>
@@ -336,9 +340,24 @@
           <span class="method">POST</span>
         </div>
       </div>
-      <p>Header row must include productName, productCategory, productPrice, productStock (productImageUrl and lowStockThreshold are optional). One bad row does not stop the rest.</p>
+      <p>Header row must include productName, productCategory, productPrice, productStock (productImageUrl, lowStockThreshold, gstRate and hsnCode are optional). One bad row does not stop the rest.</p>
       <input type="file" id="bulkImportFile" accept=".csv" />
       <button class="green" onclick="bulkImportProducts()">Upload CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon">🧾</div>
+        <div class="title-wrap">
+          <h2>Product GST</h2>
+          <span class="method">PUT</span>
+        </div>
+      </div>
+      <p>Prices include GST; this sets how much of a product's price is tax on invoices, plus its HSN code. "Store default" uses the rate configured in OrderService.</p>
+      <input type="number" id="taxProductId" placeholder="Product ID" />
+      <select id="taxGstRate"><option value="">Store default</option><option>0</option><option>0.25</option><option>3</option><option>5</option><option>12</option><option>18</option><option>28</option></select>
+      <input type="text" id="taxHsnCode" maxlength="8" placeholder="HSN code (blank = keep, '-' = clear)" />
+      <button class="green" onclick="updateProductTax()">Save GST</button>
     </div>
 
     <div class="card">
@@ -865,7 +884,9 @@
       productCategory: category,
       productImageUrl: imageUrl || null,
       productPrice: Number(price),
-      productStock: Number(stock)
+      productStock: Number(stock),
+      gstRate: document.getElementById("addGstRate").value === "" ? null : Number(document.getElementById("addGstRate").value),
+      hsnCode: document.getElementById("addHsnCode").value.trim() || null
     };
 
     const data = await apiCall(`${BASE_URL}/add`, {
@@ -878,6 +899,21 @@
     });
     showStatus("Product added successfully. Result opened in new tab.", "success");
     openResultTab("Add Product", data);
+  }
+
+  async function updateProductTax() {
+    const id = document.getElementById("taxProductId").value.trim();
+    if (!id) return showStatus("Please enter a product ID.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const params = new URLSearchParams({ id });
+    const rate = document.getElementById("taxGstRate").value;
+    if (rate !== "") params.set("gstRate", rate);
+    const hsn = document.getElementById("taxHsnCode").value.trim();
+    if (hsn) params.set("hsnCode", hsn === "-" ? "" : hsn);
+    const data = await apiCall(`${BASE_URL}/updateTax?${params}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
+    showStatus(`GST saved for product ${id}.`, "success");
+    openResultTab("Product GST", data);
   }
 
   async function bulkImportProducts() {

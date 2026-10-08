@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -567,6 +568,77 @@ class ProductServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1});
 
         assertThrows(ItemNotFoundException.class, () -> service.uploadProductImage(1, file));
+    }
+
+    // ---------- GST rate / HSN code ----------
+
+    @Test
+    void saveAcceptsAStandardGstSlabAndNormalizesTheHsnCode() {
+        stubSavesToPassThrough();
+        Product p = stored(0, 100.0, 10);
+        p.setGstRate(18.0);
+        p.setHsnCode(" 3401 ");
+
+        Product saved = service.save(p);
+
+        assertEquals(18.0, saved.getGstRate());
+        assertEquals("3401", saved.getHsnCode());
+    }
+
+    @Test
+    void saveRejectsANonStandardGstRateOrAMalformedHsnCode() {
+        Product oddRate = stored(0, 100.0, 10);
+        oddRate.setGstRate(17.0);
+        Product badHsn = stored(0, 100.0, 10);
+        badHsn.setHsnCode("34A1");
+
+        assertThrows(IllegalArgumentException.class, () -> service.save(oddRate));
+        assertThrows(IllegalArgumentException.class, () -> service.save(badHsn));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTaxSetsClearsAndKeepsTheHsnCode() {
+        Product existing = stored(1, 100.0, 5);
+        existing.setHsnCode("3401");
+        when(productRepository.findById(1)).thenReturn(Optional.of(existing));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product rated = service.updateTax(1, 5.0, null);
+        assertEquals(5.0, rated.getGstRate());
+        assertEquals("3401", rated.getHsnCode());   // null = leave it
+
+        Product cleared = service.updateTax(1, null, "");
+        assertNull(cleared.getGstRate());           // back to the store default
+        assertNull(cleared.getHsnCode());           // blank = clear it
+
+        assertThrows(IllegalArgumentException.class, () -> service.updateTax(1, 15.0, null));
+    }
+
+    @Test
+    void updateTaxThrowsForAnUnknownProduct() {
+        when(productRepository.findById(1)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.updateTax(1, 18.0, null));
+    }
+
+    @Test
+    void bulkImportReadsOptionalGstColumns() {
+        stubSavesToPassThrough();
+        MockMultipartFile file = csv(
+                "productName,productCategory,productPrice,productStock,gstRate,hsnCode\n" +
+                "Soap,personal care,40,10,18,3401\n" +
+                "Dal,grocery,120,10,,\n" +
+                "Bad,grocery,10,10,7,\n");
+
+        BulkImportResult result = service.bulkImportProducts(file);
+
+        assertEquals(2, result.successCount());
+        assertEquals(1, result.failureCount());
+        org.mockito.ArgumentCaptor<Product> saved = org.mockito.ArgumentCaptor.forClass(Product.class);
+        verify(productRepository, times(2)).save(saved.capture());
+        assertEquals(18.0, saved.getAllValues().get(0).getGstRate());
+        assertEquals("3401", saved.getAllValues().get(0).getHsnCode());
+        assertNull(saved.getAllValues().get(1).getGstRate());
     }
 
     // ---------- updateImageUrl ----------
