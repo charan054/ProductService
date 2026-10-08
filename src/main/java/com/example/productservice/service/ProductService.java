@@ -5,6 +5,7 @@ import com.example.productservice.entity.Category;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
 import com.example.productservice.entity.ProductImage;
+import com.example.productservice.entity.StockMovement;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
@@ -12,11 +13,13 @@ import com.example.productservice.repository.CategoryRepository;
 import com.example.productservice.repository.PriceHistoryRepository;
 import com.example.productservice.repository.ProductImageRepository;
 import com.example.productservice.repository.ProductRepository;
+import com.example.productservice.repository.StockMovementRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,6 +50,8 @@ public class ProductService {
     private PriceHistoryRepository priceHistoryRepository;
     @Autowired
     private ProductImageRepository productImageRepository;
+    @Autowired
+    private StockMovementRepository stockMovementRepository;
     @Value("${app.upload-dir}")
     private String uploadDir;
     public Product save(Product product) {
@@ -65,7 +71,18 @@ public class ProductService {
         product.setHsnCode(normalizeHsnCode(product.getHsnCode()));
         applyVariant(product, product.getVariantGroup(), product.getVariantLabel());
         product.setProductCategory(resolveCategory(product.getProductCategory()));
+        Integer existingStock = product.getProductId() == null ? null
+                : productRepository.findById(product.getProductId().intValue()).map(Product::getProductStock).orElse(null);
         Product saved = productRepository.save(product);
+        if (saved.getProductId() != null) {
+            if (existingStock == null) {
+                recordMovement(saved.getProductId().intValue(), saved.getProductStock(), saved.getProductStock(),
+                        StockMovement.INITIAL, "Product added", null, ADMIN_ACTOR);
+            } else if (existingStock != saved.getProductStock()) {
+                recordMovement(saved.getProductId().intValue(), saved.getProductStock() - existingStock, saved.getProductStock(),
+                        StockMovement.CORRECTION, "Product edited", null, ADMIN_ACTOR);
+            }
+        }
         warnIfLowStock(saved);
         return saved;
     }
@@ -226,8 +243,15 @@ public class ProductService {
     // read-modify-write, which let two concurrent requests for the last unit both read the same starting stock
     // and both pass their own "would this go negative" check - a lost-update race that oversold stock under
     // real concurrency despite this exact guard being present.
-    @Transactional
     public Product updateStock(int id, int stock) {
+        return updateStock(id, stock, null, null, null, null);
+    }
+
+    // Same change, with the ledger entry's context: type (SALE/CANCEL/RETURN/RESTOCK/CORRECTION; unknown cause =
+    // CORRECTION), a reason, a reference such as "order #42", and who did it. Callers that say nothing still work.
+    @Transactional
+    public Product updateStock(int id, int stock, String type, String reason, String reference, String actor) {
+        String movementType = type == null || type.isBlank() ? StockMovement.CORRECTION : parseMovementType(type);
         int updated = productRepository.adjustStock(id, stock);
         if (updated == 0) {
             // Zero rows updated means either the product doesn't exist, or it does but the delta would have
@@ -236,8 +260,91 @@ public class ProductService {
             throw new StockException("Stock is low");
         }
         Product saved = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        recordMovement(id, stock, saved.getProductStock(), movementType, reason, reference,
+                actorOrDefault(actor, movementType));
         warnIfLowStock(saved);
         return saved;
+    }
+
+    // New stock arriving from a supplier: always a positive RESTOCK entry.
+    @Transactional
+    public Product receiveStock(int id, int quantity, String reason, String reference, String actor) {
+        if (quantity <= 0) {
+            throw new StockException("Quantity received must be greater than 0");
+        }
+        return updateStock(id, quantity, StockMovement.RESTOCK, reason, reference, actor);
+    }
+
+    // Sets the stock to a counted number (a stocktake, a breakage). The old value is read under a row lock so the
+    // delta in the ledger is exact, and a reason is required - a bare number change is how stock becomes a mystery.
+    @Transactional
+    public Product correctStock(int id, int newStock, String reason, String actor) {
+        if (newStock < 0) {
+            throw new StockException("Stock must not be negative");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required for a stock correction");
+        }
+        Product product = productRepository.findByIdForUpdate(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        int delta = newStock - product.getProductStock();
+        product.setProductStock(newStock);
+        Product saved = productRepository.save(product);
+        if (delta != 0) {
+            recordMovement(id, delta, newStock, StockMovement.CORRECTION, reason, null, actorOrDefault(actor, StockMovement.CORRECTION));
+        }
+        warnIfLowStock(saved);
+        return saved;
+    }
+
+    // Newest first. type narrows it to one kind of movement; limit defaults to 100 and is capped at 500.
+    public List<StockMovement> getStockHistory(int id, String type, Integer limit) {
+        findById(id);
+        int size = limit == null ? 100 : Math.max(1, Math.min(limit, 500));
+        PageRequest page = PageRequest.of(0, size);
+        if (type == null || type.isBlank()) {
+            return stockMovementRepository.findByProductIdOrderByCreatedAtDescIdDesc(id, page);
+        }
+        return stockMovementRepository.findByProductIdAndTypeOrderByCreatedAtDescIdDesc(id, parseMovementType(type), page);
+    }
+
+    private static final String ADMIN_ACTOR = "admin";
+
+    private void recordMovement(int productId, int delta, int stockAfter, String type, String reason, String reference, String actor) {
+        StockMovement movement = new StockMovement();
+        movement.setProductId(productId);
+        movement.setDelta(delta);
+        movement.setStockAfter(stockAfter);
+        movement.setType(type);
+        movement.setReason(clip(reason, 200));
+        movement.setReference(clip(reference, 100));
+        movement.setActor(actor);
+        movement.setCreatedAt(Instant.now());
+        stockMovementRepository.save(movement);
+    }
+
+    private static String parseMovementType(String type) {
+        String upper = type.trim().toUpperCase(Locale.ROOT);
+        if (!StockMovement.TYPES.contains(upper)) {
+            throw new IllegalArgumentException("Unknown stock movement type: " + type);
+        }
+        return upper;
+    }
+
+    // Sales/cancels/returns come from OrderService; everything else is a person at the admin dashboard.
+    private static String actorOrDefault(String actor, String type) {
+        if (actor != null && !actor.isBlank()) {
+            return clip(actor.trim(), 64);
+        }
+        boolean fromOrders = StockMovement.SALE.equals(type) || StockMovement.CANCEL.equals(type) || StockMovement.RETURN.equals(type);
+        return fromOrders ? "order-service" : ADMIN_ACTOR;
+    }
+
+    private static String clip(String text, int max) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String trimmed = text.trim();
+        return trimmed.length() <= max ? trimmed : trimmed.substring(0, max);
     }
     public Product updateLowStockThreshold(int id, int threshold) {
         Product product = productRepository.findById(id).orElseThrow( ()-> new ItemNotFoundException("Product not found"));

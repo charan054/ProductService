@@ -108,6 +108,17 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void stockHistoryWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(get("/product/1/stock-history")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void receiveAndCorrectStockWithoutKeyAreUnauthorized() throws Exception {
+        mockMvc.perform(post("/product/1/receive").param("quantity", "5")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/product/1/stock/correct").param("newStock", "5").param("reason", "recount")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void relatedProductsIsPublicButReturns400ForAnUnknownId() throws Exception {
         mockMvc.perform(get("/product/related").param("id", "999999")).andExpect(status().isBadRequest());
     }

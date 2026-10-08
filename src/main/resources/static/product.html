@@ -530,6 +530,25 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">📒</div>
+        <div class="title-wrap">
+          <h2>Stock Ledger</h2>
+          <span class="method">POST / GET</span>
+        </div>
+      </div>
+      <p>Receive stock from a supplier, correct it to a counted number (a reason is required), or see every change to a product's stock and who made it. Needs the Service Key.</p>
+      <input type="number" id="ledgerProductId" placeholder="Product ID" />
+      <input type="text" id="ledgerActor" placeholder="Your name (shown in the history)" maxlength="64" />
+      <input type="number" id="ledgerQuantity" placeholder="Quantity received / counted stock" min="0" />
+      <input type="text" id="ledgerReference" placeholder="Reference, e.g. supplier delivery note (optional)" maxlength="100" />
+      <input type="text" id="ledgerReason" placeholder="Reason (required for a correction)" maxlength="200" />
+      <button onclick="receiveStock()">Receive stock</button>
+      <button onclick="correctStock()">Set stock to counted number</button>
+      <button onclick="viewStockHistory()">View stock history</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📦</div>
         <div class="title-wrap">
           <h2>Update Stock</h2>
@@ -1143,6 +1162,60 @@
     const data = await apiCall(`${BASE_URL}/priceHistory?id=${encodeURIComponent(id)}`);
     showStatus("Price history loaded successfully. Result opened in new tab.", "success");
     openResultTab("Price History", data);
+  }
+
+  function ledgerQuery(extra) {
+    const params = new URLSearchParams(extra);
+    const actor = document.getElementById("ledgerActor").value.trim();
+    const reason = document.getElementById("ledgerReason").value.trim();
+    if (actor) params.set("actor", actor);
+    if (reason) params.set("reason", reason);
+    return params.toString();
+  }
+
+  async function receiveStock() {
+    const id = document.getElementById("ledgerProductId").value;
+    const quantity = document.getElementById("ledgerQuantity").value;
+    if (!id || !quantity || Number(quantity) <= 0) return showStatus("Enter the product ID and a quantity greater than 0.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const extra = { quantity };
+    const reference = document.getElementById("ledgerReference").value.trim();
+    if (reference) extra.reference = reference;
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(id)}/receive?${ledgerQuery(extra)}`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey }
+    });
+    showStatus("Stock received. Result opened in new tab.", "success");
+    openResultTab("Receive Stock", data);
+  }
+
+  async function correctStock() {
+    const id = document.getElementById("ledgerProductId").value;
+    const counted = document.getElementById("ledgerQuantity").value;
+    const reason = document.getElementById("ledgerReason").value.trim();
+    if (!id || counted === "" || Number(counted) < 0) return showStatus("Enter the product ID and the counted stock (0 or more).", "error");
+    if (!reason) return showStatus("A reason is required for a stock correction.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(id)}/stock/correct?${ledgerQuery({ newStock: counted })}`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey }
+    });
+    showStatus("Stock corrected. Result opened in new tab.", "success");
+    openResultTab("Correct Stock", data);
+  }
+
+  async function viewStockHistory() {
+    const id = document.getElementById("ledgerProductId").value;
+    if (!id) return showStatus("Enter the product ID.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const data = await apiCall(`${BASE_URL}/${encodeURIComponent(id)}/stock-history`, {
+      headers: { "X-Service-Key": serviceKey }
+    });
+    showStatus("Stock history loaded. Result opened in new tab.", "success");
+    openResultTab("Stock History", data);
   }
 
   async function updateProductStock() {
