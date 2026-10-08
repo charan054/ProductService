@@ -729,4 +729,124 @@ class ProductServiceTest {
 
         org.junit.jupiter.api.Assertions.assertTrue(result.getImageUrl().contains("/uploads/"));
     }
+
+    // ---------- variants (options of one product) ----------
+
+    private Product option(int id, String group, String label) {
+        Product p = stored(id, 100.0, 5);
+        p.setVariantGroup(group);
+        p.setVariantLabel(label);
+        return p;
+    }
+
+    @Test
+    void updateVariantNormalizesTheGroupAndTrimsTheLabelThenCanClearThem() {
+        Product existing = stored(1, 100.0, 5);
+        when(productRepository.findById(1)).thenReturn(Optional.of(existing));
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("dove-shampoo")).thenReturn(List.of());
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product set = service.updateVariant(1, "  Dove-Shampoo ", " 340 ml ");
+        assertEquals("dove-shampoo", set.getVariantGroup());
+        assertEquals("340 ml", set.getVariantLabel());
+
+        Product cleared = service.updateVariant(1, "", null);
+        assertNull(cleared.getVariantGroup());
+        assertNull(cleared.getVariantLabel());
+    }
+
+    @Test
+    void updateVariantNeedsBothAGroupAndALabelOrNeither() {
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 100.0, 5)));
+
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, "dove-shampoo", null));
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, "dove-shampoo", "  "));
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, null, "340 ml"));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void updateVariantRejectsAMalformedGroupOrLabel() {
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 100.0, 5)));
+
+        for (String badGroup : new String[]{"dove shampoo", "-dove", "dove_shampoo", "d".repeat(64), "dove/shampoo"}) {
+            assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, badGroup, "340 ml"), badGroup);
+        }
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, "dove", "x".repeat(41)));
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, "dove", "340\nml"));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void anOptionLabelCanBeUsedOnceInAGroupInAnyCaseButAProductMayKeepItsOwn() {
+        Product me = option(1, "dove", "340 ml");
+        when(productRepository.findById(1)).thenReturn(Optional.of(me));
+        when(productRepository.findById(2)).thenReturn(Optional.of(stored(2, 100.0, 5)));
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("dove")).thenReturn(List.of(me, option(3, "dove", "1 L")));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(2, "dove", "340 ML"));
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(2, "dove", " 1 l "));
+        assertEquals("340 ml", service.updateVariant(1, "dove", "340 ml").getVariantLabel()); // re-saving itself is fine
+        assertEquals("500 ml", service.updateVariant(2, "dove", "500 ml").getVariantLabel());
+    }
+
+    @Test
+    void aGroupHoldsAtMostThirtyOptions() {
+        List<Product> full = new java.util.ArrayList<>();
+        for (int i = 10; i < 40; i++) {
+            full.add(option(i, "big", "size " + i));
+        }
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 100.0, 5)));
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("big")).thenReturn(full);
+
+        assertThrows(IllegalArgumentException.class, () -> service.updateVariant(1, "big", "one more"));
+    }
+
+    @Test
+    void updateVariantThrowsForAnUnknownProduct() {
+        when(productRepository.findById(1)).thenReturn(Optional.empty());
+        assertThrows(ItemNotFoundException.class, () -> service.updateVariant(1, "dove", "340 ml"));
+    }
+
+    @Test
+    void addingAProductValidatesAndNormalizesItsOptionToo() {
+        stubSavesToPassThrough();
+        Product p = stored(0, 100.0, 5);
+        p.setProductId(null);
+        p.setVariantGroup("Dove-Shampoo");
+        p.setVariantLabel("340 ml");
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("dove-shampoo")).thenReturn(List.of());
+
+        Product saved = service.save(p);
+        assertEquals("dove-shampoo", saved.getVariantGroup());
+
+        Product half = stored(0, 100.0, 5);
+        half.setProductId(null);
+        half.setVariantLabel("340 ml");
+        assertThrows(IllegalArgumentException.class, () -> service.save(half));
+        verify(productRepository, times(1)).save(any(Product.class));
+    }
+
+    @Test
+    void bulkImportReadsOptionalOptionColumnsAndReportsABadRow() {
+        stubSavesToPassThrough();
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("dove")).thenReturn(List.of());
+        MockMultipartFile file = csv(
+                "productName,productCategory,productPrice,productStock,variantGroup,variantLabel\n" +
+                "Dove - 340 ml,personal care,200,10,dove,340 ml\n" +
+                "Dove - 1 L,personal care,500,10,dove,1 L\n" +
+                "Plain soap,personal care,40,10,,\n" +
+                "Half,personal care,40,10,dove,\n");
+
+        BulkImportResult result = service.bulkImportProducts(file);
+
+        assertEquals(3, result.successCount());
+        assertEquals(1, result.failureCount());
+        org.mockito.ArgumentCaptor<Product> saved = org.mockito.ArgumentCaptor.forClass(Product.class);
+        verify(productRepository, times(3)).save(saved.capture());
+        assertEquals("340 ml", saved.getAllValues().get(0).getVariantLabel());
+        assertEquals("dove", saved.getAllValues().get(1).getVariantGroup());
+        assertNull(saved.getAllValues().get(2).getVariantGroup());
+    }
 }

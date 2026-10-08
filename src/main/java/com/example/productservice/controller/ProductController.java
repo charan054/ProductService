@@ -85,6 +85,12 @@ public class ProductController {
     public Product getProductById(@RequestParam Integer id){
         return productService.findById(id);
     }
+    // Same X-Service-Key boundary as updateTax. Send both, or neither to make it an ordinary product again.
+    @PutMapping("/updateVariant")
+    public Product updateProductVariant(@RequestParam Integer id, @RequestParam(required = false) String variantGroup,
+                                        @RequestParam(required = false) String variantLabel){
+        return productService.updateVariant(id, variantGroup, variantLabel);
+    }
     // Same public trust level as the other catalog-browsing GETs above.
     @GetMapping("/related")
     public List<Product> getRelatedProducts(@RequestParam Integer id, @RequestParam(required = false) Integer limit){

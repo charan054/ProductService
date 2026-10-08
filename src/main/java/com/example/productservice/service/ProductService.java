@@ -63,6 +63,7 @@ public class ProductService {
         }
         validateGstRate(product.getGstRate());
         product.setHsnCode(normalizeHsnCode(product.getHsnCode()));
+        applyVariant(product, product.getVariantGroup(), product.getVariantLabel());
         product.setProductCategory(resolveCategory(product.getProductCategory()));
         Product saved = productRepository.save(product);
         warnIfLowStock(saved);
@@ -120,6 +121,12 @@ public class ProductService {
                     }
                     if (columnIndex.containsKey("hsnCode")) {
                         product.setHsnCode(cell(values, columnIndex, "hsnCode").trim());
+                    }
+                    if (columnIndex.containsKey("variantGroup")) {
+                        product.setVariantGroup(cell(values, columnIndex, "variantGroup").trim());
+                    }
+                    if (columnIndex.containsKey("variantLabel")) {
+                        product.setVariantLabel(cell(values, columnIndex, "variantLabel").trim());
                     }
                     if (columnIndex.containsKey("lowStockThreshold")) {
                         String threshold = cell(values, columnIndex, "lowStockThreshold").trim();
@@ -278,6 +285,50 @@ public class ProductService {
             product.setHsnCode(normalizeHsnCode(hsnCode));
         }
         return productRepository.save(product);
+    }
+
+    static final int MAX_VARIANTS_PER_GROUP = 30;
+
+    /**
+     * Makes a product an option of a group (or, with both blank, an ordinary product again). A group and a label go
+     * together, a label may be used once per group (any case), and a group holds at most 30 options.
+     */
+    public Product updateVariant(int id, String variantGroup, String variantLabel) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        applyVariant(product, variantGroup, variantLabel);
+        return productRepository.save(product);
+    }
+
+    private void applyVariant(Product product, String variantGroup, String variantLabel) {
+        boolean noGroup = variantGroup == null || variantGroup.isBlank();
+        boolean noLabel = variantLabel == null || variantLabel.isBlank();
+        if (noGroup && noLabel) {
+            product.setVariantGroup(null);
+            product.setVariantLabel(null);
+            return;
+        }
+        if (noGroup || noLabel) {
+            throw new IllegalArgumentException("Give both a variant group and a variant label, or neither");
+        }
+        String group = variantGroup.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!group.matches("[a-z0-9][a-z0-9-]{0,62}")) {
+            throw new IllegalArgumentException("variantGroup must be lowercase letters, digits and dashes, up to 63 characters (e.g. dove-shampoo)");
+        }
+        String label = variantLabel.trim();
+        if (label.length() > 40 || label.chars().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("variantLabel must be at most 40 characters, e.g. \"500 g\"");
+        }
+        List<Product> others = productRepository.findByVariantGroupOrderByProductIdAsc(group).stream()
+                .filter(p -> product.getProductId() == null || !product.getProductId().equals(p.getProductId()))
+                .toList();
+        if (others.stream().anyMatch(p -> label.equalsIgnoreCase(p.getVariantLabel()))) {
+            throw new IllegalArgumentException("The group \"" + group + "\" already has an option labelled \"" + label + "\"");
+        }
+        if (others.size() >= MAX_VARIANTS_PER_GROUP) {
+            throw new IllegalArgumentException("A group can have at most " + MAX_VARIANTS_PER_GROUP + " options");
+        }
+        product.setVariantGroup(group);
+        product.setVariantLabel(label);
     }
 
     private static void validateGstRate(Double gstRate) {

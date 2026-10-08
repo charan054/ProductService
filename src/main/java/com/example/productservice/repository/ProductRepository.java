@@ -15,6 +15,8 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, JpaS
     public List<Product> findByproductName(String name);
     public List<Product> findByproductCategory(String category);
 
+    List<Product> findByVariantGroupOrderByProductIdAsc(String variantGroup);
+
     @Query("select p from Product p where p.productStock <= p.lowStockThreshold")
     List<Product> findLowStockProducts();
 
