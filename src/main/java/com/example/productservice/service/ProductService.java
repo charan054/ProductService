@@ -396,6 +396,57 @@ public class ProductService {
 
     static final int MAX_VARIANTS_PER_GROUP = 30;
 
+    public List<Product> findVariantGroupMembers(String variantGroup) {
+        return productRepository.findByVariantGroupOrderByProductIdAsc(variantGroup);
+    }
+
+    /**
+     * "Add another option": copies a product into a new option of its group. A product that is not in a group yet is
+     * put into one first (named after the product), which is why it then needs its own label (sourceLabel). The copy
+     * keeps the name unless a new one is given, and the category, image, GST rate, HSN code, low-stock threshold and
+     * price unless a new price is given; it starts with the given stock.
+     */
+    @Transactional
+    public Product addVariantOption(int sourceId, String sourceLabel, String newLabel, String newName, Double newPrice, int newStock) {
+        Product source = productRepository.findById(sourceId).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        if (newLabel == null || newLabel.isBlank()) {
+            throw new IllegalArgumentException("Give the new option a label, e.g. \"500 g\"");
+        }
+        String group = source.getVariantGroup();
+        if (group == null) {
+            if (sourceLabel == null || sourceLabel.isBlank()) {
+                throw new IllegalArgumentException("This product is not part of a group yet - say what its own option is called (sourceLabel), e.g. \"340 ml\"");
+            }
+            group = groupSlug(source);
+            updateVariant(sourceId, group, sourceLabel);
+        }
+        Product copy = new Product();
+        copy.setProductName(newName == null || newName.isBlank() ? source.getProductName() : newName.trim());
+        copy.setProductCategory(source.getProductCategory());
+        copy.setProductImageUrl(source.getProductImageUrl());
+        copy.setProductPrice(newPrice == null ? source.getProductPrice() : newPrice);
+        copy.setProductStock(newStock);
+        copy.setLowStockThreshold(source.getLowStockThreshold());
+        copy.setGstRate(source.getGstRate());
+        copy.setHsnCode(source.getHsnCode());
+        copy.setVariantGroup(group);
+        copy.setVariantLabel(newLabel);
+        return save(copy);
+    }
+
+    // A readable unique slug for a new group: "Dove Shampoo" -> "dove-shampoo" (with the product id added if taken).
+    private String groupSlug(Product source) {
+        String slug = String.valueOf(source.getProductName()).toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+        if (slug.length() > 55) {
+            slug = slug.substring(0, 55).replaceAll("-+$", "");
+        }
+        if (slug.isEmpty()) {
+            slug = "product";
+        }
+        return productRepository.findByVariantGroupOrderByProductIdAsc(slug).isEmpty() ? slug : slug + "-" + source.getProductId();
+    }
+
     /**
      * Makes a product an option of a group (or, with both blank, an ordinary product again). A group and a label go
      * together, a label may be used once per group (any case), and a group holds at most 30 options.

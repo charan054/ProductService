@@ -92,6 +92,14 @@ public class ProductController {
                                         @RequestParam(required = false) String variantLabel){
         return productService.updateVariant(id, variantGroup, variantLabel);
     }
+    // Same X-Service-Key boundary as updateVariant: copies this product into a new option of its group. sourceLabel is only
+    // needed when the product is not in a group yet.
+    @PostMapping("/{id}/addOption")
+    public Product addVariantOption(@PathVariable Integer id, @RequestParam String variantLabel, @RequestParam Integer stock,
+                                    @RequestParam(required = false) String sourceLabel, @RequestParam(required = false) String productName,
+                                    @RequestParam(required = false) Double productPrice){
+        return productService.addVariantOption(id, sourceLabel, variantLabel, productName, productPrice, stock);
+    }
     // Same public trust level as the other catalog-browsing GETs above.
     @GetMapping("/related")
     public List<Product> getRelatedProducts(@RequestParam Integer id, @RequestParam(required = false) Integer limit){

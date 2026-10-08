@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.Optional;
 
 @Repository
@@ -28,6 +29,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // a flagged review drops out of this queue - there's nothing left to decide. Same tiebreaker reasoning as
     // above.
     Page<Review> findByFlaggedTrueAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(Pageable pageable);
+
+    // The same reads over several products at once - the options of one variant group share their reviews.
+    Page<Review> findByProductIdInAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(Collection<Long> productIds, Pageable pageable);
+    long countByProductIdInAndHiddenFalse(Collection<Long> productIds);
+
+    @Query("select avg(r.rating) from Review r where r.productId in :productIds and r.hidden = false")
+    Double averageRatingForProducts(@Param("productIds") Collection<Long> productIds);
 
     @Query("select avg(r.rating) from Review r where r.productId = :productId and r.hidden = false")
     Double averageRatingForProduct(@Param("productId") Long productId);

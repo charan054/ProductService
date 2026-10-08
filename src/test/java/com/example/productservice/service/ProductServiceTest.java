@@ -991,4 +991,59 @@ class ProductServiceTest {
         assertEquals("dove", saved.getAllValues().get(1).getVariantGroup());
         assertNull(saved.getAllValues().get(2).getVariantGroup());
     }
+
+    // ---------- add another option ----------
+
+    @Test
+    void addOptionToAProductWithoutAGroupGroupsItFirstAndCopiesItsDetails() {
+        stubCategoryLookupCreatesNew();
+        Product source = stored(1, 99.0, 10);
+        source.setProductName("Dove Shampoo");
+        source.setGstRate(18.0);
+        source.setHsnCode("3305");
+        source.setProductImageUrl("http://img/dove.png");
+        when(productRepository.findById(1)).thenReturn(Optional.of(source));
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("dove-shampoo")).thenReturn(List.of());
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product copy = service.addVariantOption(1, "340 ml", "650 ml", "Dove Shampoo 650 ml", 169.0, 12);
+
+        assertEquals("dove-shampoo", source.getVariantGroup());
+        assertEquals("340 ml", source.getVariantLabel());
+        assertEquals("dove-shampoo", copy.getVariantGroup());
+        assertEquals("650 ml", copy.getVariantLabel());
+        assertEquals("Dove Shampoo 650 ml", copy.getProductName());
+        assertEquals(169.0, copy.getProductPrice());
+        assertEquals(12, copy.getProductStock());
+        assertEquals(18.0, copy.getGstRate());
+        assertEquals("3305", copy.getHsnCode());
+        assertEquals("http://img/dove.png", copy.getProductImageUrl());
+    }
+
+    @Test
+    void addOptionToAProductAlreadyInAGroupNeedsNoSourceLabelAndKeepsPriceAndName() {
+        stubCategoryLookupCreatesNew();
+        Product source = stored(1, 99.0, 10);
+        source.setVariantGroup("dove-shampoo");
+        source.setVariantLabel("340 ml");
+        when(productRepository.findById(1)).thenReturn(Optional.of(source));
+        when(productRepository.findByVariantGroupOrderByProductIdAsc("dove-shampoo")).thenReturn(List.of(source));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product copy = service.addVariantOption(1, null, "650 ml", null, null, 5);
+
+        assertEquals("Widget", copy.getProductName());
+        assertEquals(99.0, copy.getProductPrice());
+        assertEquals("dove-shampoo", copy.getVariantGroup());
+    }
+
+    @Test
+    void addOptionNeedsALabelAndASourceLabelWhenTheProductHasNoGroup() {
+        Product source = stored(1, 99.0, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(source));
+
+        assertThrows(IllegalArgumentException.class, () -> service.addVariantOption(1, "340 ml", " ", null, null, 5));
+        assertThrows(IllegalArgumentException.class, () -> service.addVariantOption(1, null, "650 ml", null, null, 5));
+        verify(productRepository, never()).save(any());
+    }
 }
