@@ -4,6 +4,7 @@ import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.Category;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
+import com.example.productservice.entity.StockMovement;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.PriceException;
 import com.example.productservice.exception.StockException;
@@ -45,6 +46,8 @@ class ProductServiceTest {
     private PriceHistoryRepository priceHistoryRepository;
     @Mock
     private com.example.productservice.repository.ProductImageRepository productImageRepository;
+    @Mock
+    private com.example.productservice.repository.StockMovementRepository stockMovementRepository;
 
     @InjectMocks
     private ProductService service;
@@ -252,6 +255,145 @@ class ProductServiceTest {
         Product result = service.updateStock(1, 5);
 
         assertEquals(15, result.getProductStock());
+    }
+
+
+    // ---------- stock ledger ----------
+
+    private StockMovement lastMovement() {
+        ArgumentCaptor<StockMovement> captor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(stockMovementRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void updateStockRecordsAMovementWithTheCallersContext() {
+        when(productRepository.adjustStock(1, -2)).thenReturn(1);
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 9.99, 8)));
+
+        service.updateStock(1, -2, "sale", null, "order #42", null);
+
+        StockMovement m = lastMovement();
+        assertEquals(1, m.getProductId());
+        assertEquals(-2, m.getDelta());
+        assertEquals(8, m.getStockAfter());
+        assertEquals("SALE", m.getType());
+        assertEquals("order #42", m.getReference());
+        assertEquals("order-service", m.getActor());
+    }
+
+    @Test
+    void updateStockWithNoContextIsARecordedCorrectionByTheAdmin() {
+        when(productRepository.adjustStock(1, 5)).thenReturn(1);
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 9.99, 15)));
+
+        service.updateStock(1, 5);
+
+        StockMovement m = lastMovement();
+        assertEquals("CORRECTION", m.getType());
+        assertEquals("admin", m.getActor());
+        assertEquals(5, m.getDelta());
+    }
+
+    @Test
+    void updateStockRejectsAnUnknownMovementTypeBeforeTouchingStock() {
+        assertThrows(IllegalArgumentException.class, () -> service.updateStock(1, 5, "THEFT", null, null, null));
+        verify(productRepository, never()).adjustStock(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void aFailedStockChangeLeavesNoLedgerEntry() {
+        when(productRepository.adjustStock(1, -20)).thenReturn(0);
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 9.99, 10)));
+
+        assertThrows(StockException.class, () -> service.updateStock(1, -20, "SALE", null, "order #1", null));
+        verify(stockMovementRepository, never()).save(any());
+    }
+
+    @Test
+    void receiveStockIsAPositiveRestockNamedAfterTheAdmin() {
+        when(productRepository.adjustStock(1, 24)).thenReturn(1);
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 9.99, 30)));
+
+        service.receiveStock(1, 24, "Supplier delivery", "DN-8841", "Asha");
+
+        StockMovement m = lastMovement();
+        assertEquals("RESTOCK", m.getType());
+        assertEquals(24, m.getDelta());
+        assertEquals("DN-8841", m.getReference());
+        assertEquals("Supplier delivery", m.getReason());
+        assertEquals("Asha", m.getActor());
+    }
+
+    @Test
+    void receiveStockRejectsAZeroOrNegativeQuantity() {
+        assertThrows(StockException.class, () -> service.receiveStock(1, 0, null, null, null));
+        assertThrows(StockException.class, () -> service.receiveStock(1, -3, null, null, null));
+        verifyNoInteractions(stockMovementRepository);
+    }
+
+    @Test
+    void correctStockWorksOutTheExactDeltaAndNeedsAReason() {
+        Product p = stored(1, 9.99, 10);
+        when(productRepository.findByIdForUpdate(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(p)).thenReturn(p);
+
+        Product result = service.correctStock(1, 7, "Stocktake: 3 damaged", "Asha");
+
+        assertEquals(7, result.getProductStock());
+        StockMovement m = lastMovement();
+        assertEquals("CORRECTION", m.getType());
+        assertEquals(-3, m.getDelta());
+        assertEquals(7, m.getStockAfter());
+        assertThrows(IllegalArgumentException.class, () -> service.correctStock(1, 5, "  ", "Asha"));
+        assertThrows(StockException.class, () -> service.correctStock(1, -1, "recount", "Asha"));
+    }
+
+    @Test
+    void correctStockToTheSameNumberRecordsNothing() {
+        Product p = stored(1, 9.99, 10);
+        when(productRepository.findByIdForUpdate(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(p)).thenReturn(p);
+
+        service.correctStock(1, 10, "recount", "Asha");
+
+        verify(stockMovementRepository, never()).save(any());
+    }
+
+    @Test
+    void savingANewProductOpensItsLedgerWithAnInitialEntry() {
+        stubCategoryLookupCreatesNew();
+        Product p = stored(0, 9.99, 12);
+        p.setProductId(null);
+        when(productRepository.save(p)).thenAnswer(inv -> {
+            p.setProductId(5L);
+            return p;
+        });
+
+        service.save(p);
+
+        StockMovement m = lastMovement();
+        assertEquals("INITIAL", m.getType());
+        assertEquals(5, m.getProductId());
+        assertEquals(12, m.getDelta());
+        assertEquals(12, m.getStockAfter());
+    }
+
+    @Test
+    void getStockHistoryFiltersByTypeAndCapsTheLimit() {
+        when(productRepository.findById(1)).thenReturn(Optional.of(stored(1, 9.99, 10)));
+        StockMovement m = new StockMovement();
+        when(stockMovementRepository.findByProductIdAndTypeOrderByCreatedAtDescIdDesc(
+                org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.eq("RESTOCK"), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(m));
+
+        List<StockMovement> result = service.getStockHistory(1, "restock", 5000);
+
+        assertEquals(List.of(m), result);
+        ArgumentCaptor<org.springframework.data.domain.Pageable> page = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(stockMovementRepository).findByProductIdAndTypeOrderByCreatedAtDescIdDesc(
+                org.mockito.ArgumentMatchers.eq(1), org.mockito.ArgumentMatchers.eq("RESTOCK"), page.capture());
+        assertEquals(500, page.getValue().getPageSize());
     }
 
     // ---------- updatePrice ----------

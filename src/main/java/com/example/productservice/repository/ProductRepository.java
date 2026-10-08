@@ -3,12 +3,16 @@ package com.example.productservice.repository;
 import com.example.productservice.entity.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
+
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Integer>, JpaSpecificationExecutor<Product> {
@@ -28,5 +32,11 @@ public interface ProductRepository extends JpaRepository<Product, Integer>, JpaS
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update Product p set p.productStock = p.productStock + :delta where p.productId = :id and p.productStock + :delta >= 0")
     int adjustStock(@Param("id") int id, @Param("delta") int delta);
+
+    // Row lock for the one change that needs the OLD stock to know its delta (an absolute correction): without it
+    // a sale landing between the read and the write would be silently overwritten.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.productId = :id")
+    Optional<Product> findByIdForUpdate(@Param("id") long id);
 
 }

@@ -4,6 +4,7 @@ import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
 import com.example.productservice.entity.ProductImage;
+import com.example.productservice.entity.StockMovement;
 import com.example.productservice.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -124,9 +125,32 @@ public class ProductController {
     public List<PriceHistory> getPriceHistory(@RequestParam Integer id){
         return productService.getPriceHistory(id);
     }
+    // stock is a signed DELTA. type/reason/reference/actor are optional ledger context (see StockMovement); OrderService
+    // sends SALE / CANCEL / RETURN with the order number, an admin leaving them out gets a CORRECTION entry.
     @PutMapping("/updateStock")
-    public Product updateProductStock(@RequestParam Integer id, @RequestParam Integer stock){
-        return productService.updateStock(id, stock);
+    public Product updateProductStock(@RequestParam Integer id, @RequestParam Integer stock,
+                                      @RequestParam(required = false) String type, @RequestParam(required = false) String reason,
+                                      @RequestParam(required = false) String reference, @RequestParam(required = false) String actor){
+        return productService.updateStock(id, stock, type, reason, reference, actor);
+    }
+    // Stock arriving from a supplier (a positive RESTOCK entry in the ledger).
+    @PostMapping("/{id}/receive")
+    public Product receiveStock(@PathVariable Integer id, @RequestParam Integer quantity,
+                                @RequestParam(required = false) String reason, @RequestParam(required = false) String reference,
+                                @RequestParam(required = false) String actor){
+        return productService.receiveStock(id, quantity, reason, reference, actor);
+    }
+    // Sets stock to a counted number; a reason is required.
+    @PostMapping("/{id}/stock/correct")
+    public Product correctStock(@PathVariable Integer id, @RequestParam Integer newStock, @RequestParam String reason,
+                                @RequestParam(required = false) String actor){
+        return productService.correctStock(id, newStock, reason, actor);
+    }
+    // Every change to this product's stock, newest first. Admin only (not in the public GET list).
+    @GetMapping("/{id}/stock-history")
+    public List<StockMovement> getStockHistory(@PathVariable Integer id, @RequestParam(required = false) String type,
+                                               @RequestParam(required = false) Integer limit){
+        return productService.getStockHistory(id, type, limit);
     }
     @PutMapping("/updateLowStockThreshold")
     public Product updateLowStockThreshold(@RequestParam Integer id, @RequestParam Integer threshold){
