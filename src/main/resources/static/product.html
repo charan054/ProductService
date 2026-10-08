@@ -548,6 +548,23 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🛒</div>
+        <div class="title-wrap">
+          <h2>Reorder List &amp; Movements Export</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>The reorder list shows what is out, under its low-stock threshold, or would sell out within two weeks at its recent selling rate, with how many to order to cover a month. The export downloads every stock movement in a date range as a CSV. Needs the Service Key.</p>
+      <input type="number" id="reorderDays" placeholder="Selling rate over how many days (default 30)" min="1" max="365" />
+      <button onclick="viewReorderList()">View reorder list</button>
+      <input type="date" id="movementsFrom" />
+      <input type="date" id="movementsTo" />
+      <input type="number" id="movementsProductId" placeholder="Product ID (optional)" />
+      <button onclick="downloadMovementsCsv()">Download movements CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">📒</div>
         <div class="title-wrap">
           <h2>Stock Ledger</h2>
@@ -1180,6 +1197,43 @@
     const data = await apiCall(`${BASE_URL}/priceHistory?id=${encodeURIComponent(id)}`);
     showStatus("Price history loaded successfully. Result opened in new tab.", "success");
     openResultTab("Price History", data);
+  }
+
+  async function viewReorderList() {
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const days = document.getElementById("reorderDays").value || "30";
+    const data = await apiCall(`${BASE_URL}/reorder-list?days=${encodeURIComponent(days)}`, {
+      headers: { "X-Service-Key": serviceKey }
+    });
+    showStatus(data.length ? `${data.length} product(s) to reorder. Result opened in new tab.` : "Nothing needs reordering right now.", "success");
+    openResultTab("Reorder List", data);
+  }
+
+  async function downloadMovementsCsv() {
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const params = new URLSearchParams();
+    const from = document.getElementById("movementsFrom").value;
+    const to = document.getElementById("movementsTo").value;
+    const productId = document.getElementById("movementsProductId").value;
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    if (productId) params.set("productId", productId);
+    try {
+      const response = await fetch(`${BASE_URL}/stock-movements/export?${params}`, { headers: { "X-Service-Key": serviceKey } });
+      if (!response.ok) throw new Error((await response.text()) || `HTTP Error: ${response.status}`);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(await response.blob());
+      link.download = "stock-movements.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      showStatus("stock-movements.csv downloaded.", "success");
+    } catch (error) {
+      showStatus("CSV download failed: " + error.message, "error");
+    }
   }
 
   async function addOption() {

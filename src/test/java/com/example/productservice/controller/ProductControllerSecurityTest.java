@@ -125,6 +125,23 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void stockReportsWithoutKeyAreUnauthorized() throws Exception {
+        mockMvc.perform(get("/product/reorder-list")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/product/stock-movements/export")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void stockReportsWithTheKeyWork() throws Exception {
+        mockMvc.perform(get("/product/reorder-list").header("X-Service-Key", "test-service-key")).andExpect(status().isOk());
+        mockMvc.perform(get("/product/stock-movements/export").header("X-Service-Key", "test-service-key"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(
+                        org.hamcrest.Matchers.startsWith("id,createdAt,productId,productName,type,delta")));
+        mockMvc.perform(get("/product/reorder-list").param("days", "0").header("X-Service-Key", "test-service-key"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void relatedProductsIsPublicButReturns400ForAnUnknownId() throws Exception {
         mockMvc.perform(get("/product/related").param("id", "999999")).andExpect(status().isBadRequest());
     }
