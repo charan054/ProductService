@@ -4,6 +4,7 @@ import com.example.productservice.entity.Review;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -45,4 +46,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // review's photo is still wanted). OrderService's photo tidy-up deletes the files nothing in this list names.
     @Query("select r.photoUrl from Review r where r.photoUrl is not null and r.photoUrl <> ''")
     List<String> findAllPhotoUrls();
+
+    // Account deletion: the reviews stay (their stars and words are the shop's) but stop pointing at a person. The name
+    // becomes a placeholder, the phone number becomes -reviewId (unique per review, so the (product, reviewer) unique key
+    // still holds, and never a valid mobile number), and the photo link is dropped (the file is then unreferenced and
+    // OrderService's photo tidy-up removes it). Returns how many reviews changed.
+    @Modifying
+    @Query("update Review r set r.reviewerName = 'Deleted customer', r.reviewerPhno = 0 - r.reviewId, r.photoUrl = null "
+            + "where r.reviewerPhno = :phno and r.reviewerPhno > 0")
+    int anonymiseByReviewerPhno(@Param("phno") long phno);
 }

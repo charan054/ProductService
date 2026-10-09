@@ -336,4 +336,45 @@ class ReviewControllerTest {
                 .andExpect(jsonPath("$[?(@ == 'https://shop.example/review-photos/a.jpg')]").exists())
                 .andExpect(jsonPath("$[?(@ == 'https://shop.example/review-photos/b.jpg')]").exists());
     }
+
+    @Test
+    void anonymiseWithoutServiceKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(put("/product/reviews/anonymise").param("phno", "9999999999")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anonymisingAReviewerKeepsTheirReviewsButRemovesNamePhoneAndPhoto() throws Exception {
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                .content(reviewJsonWithPhoto("Alice", 9999999999L, "https://shop.example/review-photos/a.jpg")));
+        addReview("Bob", 8888888888L, 3, "Fine");
+
+        mockMvc.perform(put("/product/reviews/anonymise").param("phno", "9999999999").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk())
+                .andExpect(content().string("1"));
+
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[?(@.reviewerName == 'Alice')]").isEmpty())
+                .andExpect(jsonPath("$.content[?(@.reviewerName == 'Deleted customer')]").isNotEmpty())
+                .andExpect(jsonPath("$.content[?(@.photoUrl == 'https://shop.example/review-photos/a.jpg')]").isEmpty());
+        mockMvc.perform(get("/product/reviews/count").param("phno", "9999999999")).andExpect(content().string("0"));
+        // The reviewer number is no longer a phone number, and a repeat finds nothing more to change.
+        org.junit.jupiter.api.Assertions.assertTrue(reviewRepository.findAll().stream()
+                .noneMatch(rv -> rv.getReviewerPhno() == 9999999999L));
+        mockMvc.perform(put("/product/reviews/anonymise").param("phno", "9999999999").header("X-Service-Key", VALID_KEY))
+                .andExpect(content().string("0"));
+    }
+
+    @Test
+    void twoAnonymisedReviewersOnTheSameProductDoNotCollideOnTheUniqueKey() throws Exception {
+        addReview("Alice", 9999999999L, 5, "Great");
+        addReview("Bob", 8888888888L, 4, "Good");
+
+        mockMvc.perform(put("/product/reviews/anonymise").param("phno", "9999999999").header("X-Service-Key", VALID_KEY))
+                .andExpect(content().string("1"));
+        mockMvc.perform(put("/product/reviews/anonymise").param("phno", "8888888888").header("X-Service-Key", VALID_KEY))
+                .andExpect(content().string("1"));
+
+        mockMvc.perform(get("/product/" + productId + "/reviews")).andExpect(jsonPath("$.totalElements").value(2));
+    }
 }
