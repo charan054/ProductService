@@ -9,6 +9,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/product")
 public class ReviewController {
@@ -69,6 +71,13 @@ public class ReviewController {
     @PutMapping("/{productId}/reviews/{reviewId}/unhide")
     public Review unhideReview(@PathVariable Long reviewId) {
         return reviewService.unhideReview(reviewId);
+    }
+
+    // Every photo link a review (hidden ones too) still uses. X-Service-Key only by the default rule: it is the list
+    // OrderService checks before deleting review-photo files nothing refers to any more.
+    @GetMapping("/reviews/photos")
+    public List<String> getReviewPhotoUrls() {
+        return reviewService.allPhotoUrls();
     }
 
     @GetMapping("/reviews/flagged")

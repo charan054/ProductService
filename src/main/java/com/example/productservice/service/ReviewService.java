@@ -144,6 +144,11 @@ public class ReviewService {
         return reviewRepository.countByReviewerPhnoAndHiddenFalse(reviewerPhno);
     }
 
+    // Every photo link a review still uses, hidden reviews included.
+    public List<String> allPhotoUrls() {
+        return reviewRepository.findAllPhotoUrls();
+    }
+
     static final int MAX_PHOTO_URL_LENGTH = 500;
 
     // Blank means no photo. Otherwise it has to be one absolute http(s) URL with a host and no spaces, quotes or angle
