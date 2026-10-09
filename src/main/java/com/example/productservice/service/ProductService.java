@@ -1,6 +1,7 @@
 package com.example.productservice.service;
 
 import com.example.productservice.dto.BulkImportResult;
+import com.example.productservice.dto.PriceUpdateResult;
 import com.example.productservice.entity.Category;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
@@ -606,6 +607,76 @@ public class ProductService {
             return "";
         }
     }
+    private static final double LARGE_PRICE_CHANGE = 0.5;
+
+    // Bulk price change from a CSV with productId,newPrice columns. dryRun=true (the controller default) only reports
+    // what would change, so an owner can check the preview before applying. Applying goes through updatePrice(), so
+    // every change still lands in the price history. A bad row never stops the rest.
+    public PriceUpdateResult bulkPriceUpdate(MultipartFile file, boolean dryRun) {
+        List<PriceUpdateResult.Row> rows = new ArrayList<>();
+        int changed = 0, unchanged = 0, failed = 0;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            String headerLine = reader.readLine();
+            if (headerLine == null || headerLine.isBlank()) {
+                throw new IllegalArgumentException("CSV file is empty");
+            }
+            Map<String, Integer> columns = new HashMap<>();
+            String[] headers = headerLine.split(",", -1);
+            for (int i = 0; i < headers.length; i++) {
+                columns.put(headers[i].trim(), i);
+            }
+            for (String required : List.of("productId", "newPrice")) {
+                if (!columns.containsKey(required)) {
+                    throw new IllegalArgumentException("CSV header is missing required column: " + required);
+                }
+            }
+            String line;
+            int rowNumber = 0;
+            while ((line = reader.readLine()) != null) {
+                rowNumber++;
+                if (line.isBlank()) {
+                    continue;
+                }
+                String[] values = line.split(",", -1);
+                Integer productId = null;
+                String name = null;
+                Double oldPrice = null, newPrice = null;
+                try {
+                    productId = Integer.parseInt(cell(values, columns, "productId").trim());
+                    newPrice = Double.parseDouble(cell(values, columns, "newPrice").trim());
+                    Product product = productRepository.findById(productId)
+                            .orElseThrow(() -> new ItemNotFoundException("Product not found"));
+                    name = product.getProductName();
+                    oldPrice = product.getProductPrice();
+                    if (!(newPrice > 0)) {
+                        throw new PriceException("Price must be greater than 0");
+                    }
+                    boolean large = oldPrice > 0 && Math.abs(newPrice - oldPrice) / oldPrice > LARGE_PRICE_CHANGE;
+                    if (oldPrice.doubleValue() == newPrice.doubleValue()) {
+                        unchanged++;
+                        rows.add(new PriceUpdateResult.Row(rowNumber, productId, name, oldPrice, newPrice, "UNCHANGED", null, false));
+                        continue;
+                    }
+                    if (!dryRun) {
+                        updatePrice(productId, newPrice);
+                    }
+                    changed++;
+                    rows.add(new PriceUpdateResult.Row(rowNumber, productId, name, oldPrice, newPrice, "CHANGE",
+                            large ? "More than 50% change - check this is not a typo" : null, large));
+                } catch (NumberFormatException e) {
+                    failed++;
+                    rows.add(new PriceUpdateResult.Row(rowNumber, productId, name, oldPrice, newPrice, "ERROR", "productId and newPrice must be numbers", false));
+                } catch (RuntimeException e) {
+                    failed++;
+                    rows.add(new PriceUpdateResult.Row(rowNumber, productId, name, oldPrice, newPrice, "ERROR", e.getMessage(), false));
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Could not read CSV file: " + e.getMessage());
+        }
+        return new PriceUpdateResult(dryRun, changed, unchanged, failed, rows);
+    }
+
     public Product updatePrice(int id, double price) {
         Product product = productRepository.findById(id).orElseThrow( ()-> new ItemNotFoundException("Product not found"));
         if(price<=0)

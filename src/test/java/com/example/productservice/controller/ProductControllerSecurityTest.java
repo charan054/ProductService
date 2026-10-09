@@ -167,6 +167,20 @@ class ProductControllerSecurityTest {
                 .andExpect(status().isOk());
     }
 
+    private static final MockMultipartFile PRICE_CSV = new MockMultipartFile(
+            "file", "prices.csv", "text/csv", "productId,newPrice\n999999,10\n".getBytes(StandardCharsets.UTF_8));
+
+    @Test
+    void bulkPriceUpdateWithoutKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(multipart("/product/bulkPriceUpdate").file(PRICE_CSV)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void bulkPriceUpdateWithValidKeyDefaultsToADryRun() throws Exception {
+        mockMvc.perform(multipart("/product/bulkPriceUpdate").file(PRICE_CSV).header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void recentStockChangesNeedTheKeyAndRejectABadWindow() throws Exception {
         mockMvc.perform(get("/product/stock-movements/recent")).andExpect(status().isUnauthorized());
