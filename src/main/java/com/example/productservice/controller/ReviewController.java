@@ -18,12 +18,13 @@ public class ReviewController {
     @PostMapping("/{productId}/reviews")
     public Review addReview(@PathVariable Long productId, @RequestBody Review review) {
         return reviewService.addReview(productId, review.getReviewerName(), review.getReviewerPhno(),
-                review.getRating(), review.getComment());
+                review.getRating(), review.getComment(), review.getPhotoUrl());
     }
 
     @PutMapping("/{productId}/reviews/{reviewId}")
     public Review updateReview(@PathVariable Long reviewId, @RequestBody Review review) {
-        return reviewService.updateReview(reviewId, review.getReviewerPhno(), review.getRating(), review.getComment());
+        return reviewService.updateReview(reviewId, review.getReviewerPhno(), review.getRating(), review.getComment(),
+                review.getPhotoUrl());
     }
 
     @DeleteMapping("/{productId}/reviews/{reviewId}")

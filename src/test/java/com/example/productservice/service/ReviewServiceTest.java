@@ -91,7 +91,52 @@ class ReviewServiceTest {
         assertEquals(1L, result.getProductId());
     }
 
+    @Test
+    void addReviewStoresAValidPhotoLinkTrimmed() {
+        when(productService.findById(1)).thenReturn(product(1));
+        when(reviewRepository.findByProductIdAndReviewerPhno(1L, 9999999999L)).thenReturn(Optional.empty());
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Review result = service.addReview(1L, "Alice", 9999999999L, 5, "Great", "  https://shop.example/review-photos/a.jpg  ");
+
+        assertEquals("https://shop.example/review-photos/a.jpg", result.getPhotoUrl());
+    }
+
+    @Test
+    void addReviewTreatsABlankPhotoAsNone() {
+        when(productService.findById(1)).thenReturn(product(1));
+        when(reviewRepository.findByProductIdAndReviewerPhno(1L, 9999999999L)).thenReturn(Optional.empty());
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertNull(service.addReview(1L, "Alice", 9999999999L, 5, "Great", "   ").getPhotoUrl());
+        assertNull(service.addReview(1L, "Alice", 9999999999L, 5, "Great").getPhotoUrl());
+    }
+
+    @Test
+    void addReviewRejectsPhotoLinksThatAreNotPlainWebImages() {
+        when(productService.findById(1)).thenReturn(product(1));
+        for (String bad : new String[]{"javascript:alert(1)", "data:image/png;base64,AAAA", "//evil.example/a.png", "/uploads/a.png",
+                "ftp://x.example/a.png", "https://", "https://exa mple.com/a.png", "https://x.example/a.png\"onerror=\"x",
+                "https://x.example/<script>", "https://x.example/" + "a".repeat(500)}) {
+            assertThrows(ReviewException.class, () -> service.addReview(1L, "Alice", 9999999999L, 5, "Great", bad), bad);
+        }
+        verify(reviewRepository, never()).save(any());
+    }
+
     // ---------- updateReview ----------
+
+    @Test
+    void updateReviewKeepsTheCurrentPhotoWhenNoneIsSentChangesItWhenGivenAndRemovesItWhenBlank() {
+        Review existing = review(1, 1, 9999999999L, 4);
+        existing.setPhotoUrl("https://shop.example/old.jpg");
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(reviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals("https://shop.example/old.jpg", service.updateReview(1L, 9999999999L, 4, "same", null).getPhotoUrl());
+        assertEquals("https://shop.example/new.jpg", service.updateReview(1L, 9999999999L, 4, "same", "https://shop.example/new.jpg").getPhotoUrl());
+        assertNull(service.updateReview(1L, 9999999999L, 4, "same", "").getPhotoUrl());
+        assertThrows(ReviewException.class, () -> service.updateReview(1L, 9999999999L, 4, "same", "javascript:1"));
+    }
 
     @Test
     void updateReviewRejectsAnotherReviewersAttempt() {

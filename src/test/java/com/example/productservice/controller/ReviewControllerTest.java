@@ -114,6 +114,56 @@ class ReviewControllerTest {
                 .andExpect(jsonPath("$.rating").value(2));
     }
 
+    private String reviewJsonWithPhoto(String name, long phno, String photoUrl) {
+        return """
+                {"reviewerName":"%s","reviewerPhno":%d,"rating":5,"comment":"With a picture","photoUrl":%s}
+                """.formatted(name, phno, photoUrl == null ? "null" : "\"" + photoUrl + "\"");
+    }
+
+    @Test
+    void aReviewCanCarryAPhotoLinkAndThePublicListingShowsIt() throws Exception {
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJsonWithPhoto("Alice", 9999999999L, "https://shop.example/review-photos/a.jpg")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoUrl").value("https://shop.example/review-photos/a.jpg"));
+
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].photoUrl").value("https://shop.example/review-photos/a.jpg"))
+                .andExpect(jsonPath("$.content[0].reviewerPhno").doesNotExist());
+    }
+
+    @Test
+    void aBadPhotoLinkIsRejectedBeforeAnythingIsSaved() throws Exception {
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJsonWithPhoto("Alice", 9999999999L, "javascript:alert(1)")))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(jsonPath("$.content").isEmpty());
+    }
+
+    @Test
+    void hidingAReviewTakesItsPhotoOffTheListingAndEditingKeepsOrReplacesIt() throws Exception {
+        String body = mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJsonWithPhoto("Alice", 9999999999L, "https://shop.example/review-photos/a.jpg")))
+                .andReturn().getResponse().getContentAsString();
+        long reviewId = ((Number) com.jayway.jsonpath.JsonPath.read(body, "$.reviewId")).longValue();
+
+        // An edit from a client that sends no photoUrl keeps the photo; one that sends a new link replaces it.
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId).contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJson("Alice", 9999999999L, 4, "Edited")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoUrl").value("https://shop.example/review-photos/a.jpg"));
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId).contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJsonWithPhoto("Alice", 9999999999L, "https://shop.example/review-photos/b.jpg")))
+                .andExpect(jsonPath("$.photoUrl").value("https://shop.example/review-photos/b.jpg"));
+
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId + "/hide").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/product/" + productId + "/reviews"))
+                .andExpect(jsonPath("$.content").isEmpty());
+    }
+
     @Test
     void updateReviewByADifferentReviewerIsRejected() throws Exception {
         String body = mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
