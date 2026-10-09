@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -147,6 +148,12 @@ public class ReviewService {
     // Every photo link a review still uses, hidden reviews included.
     public List<String> allPhotoUrls() {
         return reviewRepository.findAllPhotoUrls();
+    }
+
+    // Account deletion on the customer side: see ReviewRepository.anonymiseByReviewerPhno. Safe to repeat.
+    @Transactional
+    public int anonymiseReviewer(long reviewerPhno) {
+        return reviewRepository.anonymiseByReviewerPhno(reviewerPhno);
     }
 
     static final int MAX_PHOTO_URL_LENGTH = 500;

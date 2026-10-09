@@ -80,6 +80,13 @@ public class ReviewController {
         return reviewService.allPhotoUrls();
     }
 
+    // X-Service-Key only (default rule). Called by OrderService when a customer deletes their account: the reviewer's
+    // name, phone number and photo are taken off every review they wrote. Returns how many reviews changed.
+    @PutMapping("/reviews/anonymise")
+    public int anonymiseReviewer(@RequestParam long phno) {
+        return reviewService.anonymiseReviewer(phno);
+    }
+
     @GetMapping("/reviews/flagged")
     public Page<Review> getFlaggedReviews(@RequestParam(defaultValue = "0") int page,
                                            @RequestParam(defaultValue = "20") int size) {
