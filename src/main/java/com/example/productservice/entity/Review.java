@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
         "reviewerPhno",
         "rating",
         "comment",
+        "photoUrl",
         "createdAt",
         "flagged",
         "flagReason",
@@ -30,6 +31,10 @@ public class Review {
     private long reviewerPhno;
     private int rating;
     private String comment;
+    // Optional photo the reviewer attached: an absolute http(s) image URL (validated in ReviewService). It lives and
+    // dies with the review, so hiding or deleting the review takes the photo off the storefront with it.
+    @Column(length = 500)
+    private String photoUrl;
     private LocalDateTime createdAt = LocalDateTime.now();
     // Set by ReviewService.flagReview() - a customer reporting a review, not a moderation decision itself. A
     // flagged review still shows up publicly until an admin actually hides it.

@@ -21,8 +21,13 @@ public class ReviewService {
     private ProductService productService;
 
     public Review addReview(Long productId, String reviewerName, long reviewerPhno, int rating, String comment) {
+        return addReview(productId, reviewerName, reviewerPhno, rating, comment, null);
+    }
+
+    public Review addReview(Long productId, String reviewerName, long reviewerPhno, int rating, String comment, String photoUrl) {
         productService.findById(productId.intValue());
         validateRating(rating);
+        String photo = normalizePhotoUrl(photoUrl);
         reviewRepository.findByProductIdAndReviewerPhno(productId, reviewerPhno).ifPresent(r -> {
             throw new ReviewException("You have already reviewed this product; update your existing review instead");
         });
@@ -32,18 +37,27 @@ public class ReviewService {
         review.setReviewerPhno(reviewerPhno);
         review.setRating(rating);
         review.setComment(comment);
+        review.setPhotoUrl(photo);
         return reviewRepository.save(review);
     }
 
     public Review updateReview(Long reviewId, long reviewerPhno, int rating, String comment) {
+        return updateReview(reviewId, reviewerPhno, rating, comment, null);
+    }
+
+    // photoUrl null leaves the current photo alone (an older client that does not know about photos must not wipe it);
+    // an empty string removes it; anything else replaces it after the same validation as when adding.
+    public Review updateReview(Long reviewId, long reviewerPhno, int rating, String comment, String photoUrl) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ItemNotFoundException("Review not found"));
         if (review.getReviewerPhno() != reviewerPhno) {
             throw new ReviewException("You can only update your own review");
         }
         validateRating(rating);
+        String photo = photoUrl == null ? review.getPhotoUrl() : normalizePhotoUrl(photoUrl);
         review.setRating(rating);
         review.setComment(comment);
+        review.setPhotoUrl(photo);
         return reviewRepository.save(review);
     }
 
@@ -128,6 +142,31 @@ public class ReviewService {
     // concept of a customer, just a count of what that phone number has posted here.
     public long getReviewCountForCustomer(long reviewerPhno) {
         return reviewRepository.countByReviewerPhnoAndHiddenFalse(reviewerPhno);
+    }
+
+    static final int MAX_PHOTO_URL_LENGTH = 500;
+
+    // Blank means no photo. Otherwise it has to be one absolute http(s) URL with a host and no spaces, quotes or angle
+    // brackets - it ends up in an img src, and javascript:, data: and relative URLs have no place there.
+    static String normalizePhotoUrl(String photoUrl) {
+        if (photoUrl == null || photoUrl.isBlank()) {
+            return null;
+        }
+        String url = photoUrl.trim();
+        if (url.length() > MAX_PHOTO_URL_LENGTH) {
+            throw new ReviewException("The photo link can be at most " + MAX_PHOTO_URL_LENGTH + " characters");
+        }
+        if (!url.matches("(?i)https?://[^\\s<>\"'`]+")) {
+            throw new ReviewException("The photo must be a web link starting with http:// or https://");
+        }
+        try {
+            if (java.net.URI.create(url).getHost() == null) {
+                throw new ReviewException("The photo link has no host name");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new ReviewException("The photo link is not a valid web address");
+        }
+        return url;
     }
 
     private void validateRating(int rating) {
