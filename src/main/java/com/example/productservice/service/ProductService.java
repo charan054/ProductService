@@ -71,8 +71,11 @@ public class ProductService {
         product.setHsnCode(normalizeHsnCode(product.getHsnCode()));
         applyVariant(product, product.getVariantGroup(), product.getVariantLabel());
         product.setProductCategory(resolveCategory(product.getProductCategory()));
-        Integer existingStock = product.getProductId() == null ? null
-                : productRepository.findById(product.getProductId().intValue()).map(Product::getProductStock).orElse(null);
+        Product existing = product.getProductId() == null ? null
+                : productRepository.findById(product.getProductId().intValue()).orElse(null);
+        Integer existingStock = existing == null ? null : existing.getProductStock();
+        // createdAt is the server's to decide: stamped on creation, carried over on an edit, never client-supplied.
+        product.setCreatedAt(existing == null ? java.time.Instant.now() : existing.getCreatedAt());
         Product saved = productRepository.save(product);
         if (saved.getProductId() != null) {
             if (existingStock == null) {

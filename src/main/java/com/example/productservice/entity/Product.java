@@ -48,5 +48,9 @@ public class Product {
     private String variantGroup;
     @Column(length = 40)
     private String variantLabel;
+    // When the product was first added (UTC). Set by ProductService.save() and never taken from a request body or
+    // changed by an edit. Null for products that existed before this field was introduced - they are simply not
+    // "new", which is also true.
+    private java.time.Instant createdAt;
 
 }
