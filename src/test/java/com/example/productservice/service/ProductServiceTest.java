@@ -28,6 +28,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -90,6 +91,45 @@ class ProductServiceTest {
         when(productRepository.save(p)).thenReturn(p);
         Product result = service.save(p);
         assertEquals(9.99, result.getProductPrice());
+    }
+
+    @Test
+    void saveStampsCreatedAtOnANewProductAndIgnoresAClientSuppliedValue() {
+        stubCategoryLookupCreatesNew();
+        Product p = stored(0, 9.99, 10);
+        p.setCreatedAt(java.time.Instant.parse("2001-01-01T00:00:00Z"));
+        when(productRepository.save(p)).thenReturn(p);
+        java.time.Instant before = java.time.Instant.now();
+
+        Product result = service.save(p);
+
+        assertTrue(!result.getCreatedAt().isBefore(before));
+        assertTrue(!result.getCreatedAt().isAfter(java.time.Instant.now()));
+    }
+
+    @Test
+    void saveKeepsTheOriginalCreatedAtWhenAProductIsEdited() {
+        stubCategoryLookupCreatesNew();
+        java.time.Instant original = java.time.Instant.parse("2026-09-01T00:00:00Z");
+        Product existing = stored(5, 9.99, 10);
+        existing.setCreatedAt(original);
+        when(productRepository.findById(5)).thenReturn(Optional.of(existing));
+        Product edit = stored(5, 12.5, 10);
+        edit.setCreatedAt(java.time.Instant.parse("2030-01-01T00:00:00Z"));
+        when(productRepository.save(edit)).thenReturn(edit);
+
+        assertEquals(original, service.save(edit).getCreatedAt());
+    }
+
+    @Test
+    void saveLeavesCreatedAtNullWhenAnEditedProductPredatesTheField() {
+        stubCategoryLookupCreatesNew();
+        Product existing = stored(6, 9.99, 10);
+        when(productRepository.findById(6)).thenReturn(Optional.of(existing));
+        Product edit = stored(6, 12.5, 10);
+        when(productRepository.save(edit)).thenReturn(edit);
+
+        assertNull(service.save(edit).getCreatedAt());
     }
 
     @Test
