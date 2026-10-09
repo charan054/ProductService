@@ -312,4 +312,28 @@ class ReviewControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string("1"));
     }
+
+    @Test
+    void photoListWithoutServiceKeyIsUnauthorized() throws Exception {
+        mockMvc.perform(get("/product/reviews/photos")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void photoListNamesEveryPhotoAReviewUsesHiddenOnesIncludedAndSkipsReviewsWithoutOne() throws Exception {
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                .content(reviewJsonWithPhoto("Alice", 9999999999L, "https://shop.example/review-photos/a.jpg")));
+        mockMvc.perform(post("/product/" + productId + "/reviews").contentType(MediaType.APPLICATION_JSON)
+                .content(reviewJsonWithPhoto("Bob", 8888888888L, "https://shop.example/review-photos/b.jpg")));
+        addReview("Cara", 7777777777L, 4, "No picture");
+        long bobId = reviewRepository.findAll().stream()
+                .filter(r -> "Bob".equals(r.getReviewerName())).findFirst().orElseThrow().getReviewId();
+        mockMvc.perform(put("/product/" + productId + "/reviews/" + bobId + "/hide").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/product/reviews/photos").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[?(@ == 'https://shop.example/review-photos/a.jpg')]").exists())
+                .andExpect(jsonPath("$[?(@ == 'https://shop.example/review-photos/b.jpg')]").exists());
+    }
 }

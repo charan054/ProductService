@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -39,4 +40,9 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("select avg(r.rating) from Review r where r.productId = :productId and r.hidden = false")
     Double averageRatingForProduct(@Param("productId") Long productId);
+
+    // Every photo link any review still points at, hidden reviews included (hiding is reversible, so a hidden
+    // review's photo is still wanted). OrderService's photo tidy-up deletes the files nothing in this list names.
+    @Query("select r.photoUrl from Review r where r.photoUrl is not null and r.photoUrl <> ''")
+    List<String> findAllPhotoUrls();
 }
