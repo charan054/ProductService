@@ -351,6 +351,21 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">💲</div>
+        <div class="title-wrap">
+          <h2>Bulk Price Update</h2>
+          <span class="method">POST</span>
+        </div>
+      </div>
+      <p>CSV with productId and newPrice columns. Preview first: nothing changes until you tick "Apply" and upload again. Every applied change is kept in the price history. Changes of more than 50% are flagged.</p>
+      <input type="file" id="bulkPriceFile" accept=".csv" />
+      <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="bulkPriceApply" style="width:auto;" /> Apply changes (otherwise preview only)</label>
+      <button class="green" onclick="bulkPriceUpdate()">Upload CSV</button>
+      <div id="bulkPriceOut" style="margin-top:10px; overflow-x:auto;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">🧾</div>
         <div class="title-wrap">
           <h2>Product GST</h2>
@@ -1024,6 +1039,29 @@
 
     showStatus(`Import finished: ${data.successCount} succeeded, ${data.failureCount} failed. Result opened in new tab.`, "success");
     openResultTab("Bulk Import Result", [data]);
+  }
+
+  async function bulkPriceUpdate() {
+    const file = document.getElementById("bulkPriceFile").files[0];
+    if (!file) return showStatus("Please choose a CSV file.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const apply = document.getElementById("bulkPriceApply").checked;
+    const formData = new FormData();
+    formData.append("file", file);
+    const data = await apiCall(`${BASE_URL}/bulkPriceUpdate?dryRun=${!apply}`, {
+      method: "POST",
+      headers: { "X-Service-Key": serviceKey },
+      body: formData
+    });
+    if (!data || !data.rows) return;
+    const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    document.getElementById("bulkPriceOut").innerHTML =
+      `<p><strong>${data.dryRun ? "Preview (nothing changed)" : "Applied"}:</strong> ${data.changed} change, ${data.unchanged} unchanged, ${data.failed} failed.</p>`
+      + `<table style="width:100%; border-collapse:collapse; font-size:13px;"><tr><th>Row</th><th>Product</th><th>Old</th><th>New</th><th>Status</th><th>Note</th></tr>`
+      + data.rows.map(r => `<tr style="${r.largeChange || r.status === "ERROR" ? "color:#b45309;" : ""}"><td>${r.rowNumber}</td><td>${esc(r.productId)} ${esc(r.productName)}</td><td>${esc(r.oldPrice)}</td><td>${esc(r.newPrice)}</td><td>${esc(r.status)}</td><td>${esc(r.message)}</td></tr>`).join("")
+      + `</table>`;
+    showStatus(data.dryRun ? "Preview ready - tick Apply and upload again to save." : "Prices updated.", "success");
   }
 
   async function uploadProductImage() {

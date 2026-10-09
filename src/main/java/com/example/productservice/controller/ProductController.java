@@ -1,6 +1,7 @@
 package com.example.productservice.controller;
 
 import com.example.productservice.dto.BulkImportResult;
+import com.example.productservice.dto.PriceUpdateResult;
 import com.example.productservice.entity.PriceHistory;
 import com.example.productservice.entity.Product;
 import com.example.productservice.entity.ProductImage;
@@ -34,6 +35,12 @@ public class ProductController {
     @PostMapping("/bulkImport")
     public BulkImportResult bulkImportProducts(@RequestParam("file") MultipartFile file){
         return productService.bulkImportProducts(file);
+    }
+    // X-Service-Key gated like updatePrice. dryRun defaults to true: you must send dryRun=false to actually change prices.
+    @PostMapping("/bulkPriceUpdate")
+    public PriceUpdateResult bulkPriceUpdate(@RequestParam("file") MultipartFile file,
+                                             @RequestParam(defaultValue = "true") boolean dryRun){
+        return productService.bulkPriceUpdate(file, dryRun);
     }
     // Same X-Service-Key boundary as add/bulkImport above - falls under the default authenticated rule, no
     // SecurityConfig changes needed. The saved file itself is served back out publicly at /uploads/** (see

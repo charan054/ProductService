@@ -610,6 +610,44 @@ class ProductServiceTest {
         assertEquals(1, service.getCategories().size());
     }
 
+    // ---------- bulkPriceUpdate ----------
+
+    @Test
+    void bulkPriceUpdateDryRunReportsChangesWithoutSaving() {
+        when(productRepository.findById(1)).thenReturn(java.util.Optional.of(stored(1, 100.0, 5)));
+        when(productRepository.findById(2)).thenReturn(java.util.Optional.of(stored(2, 50.0, 5)));
+        when(productRepository.findById(3)).thenReturn(java.util.Optional.empty());
+
+        com.example.productservice.dto.PriceUpdateResult r = service.bulkPriceUpdate(
+                csv("productId,newPrice\n1,120\n2,50\n3,10\nx,5\n1,-4\n"), true);
+
+        assertTrue(r.dryRun());
+        assertEquals(1, r.changed());
+        assertEquals(1, r.unchanged());
+        assertEquals(3, r.failed());
+        verify(productRepository, never()).save(any(Product.class));
+        verify(priceHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void bulkPriceUpdateAppliesThroughUpdatePriceAndFlagsLargeMoves() {
+        Product p = stored(1, 100.0, 5);
+        when(productRepository.findById(1)).thenReturn(java.util.Optional.of(p));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        com.example.productservice.dto.PriceUpdateResult r = service.bulkPriceUpdate(csv("newPrice,productId\n200,1\n"), false);
+
+        assertEquals(1, r.changed());
+        assertTrue(r.rows().get(0).largeChange());
+        assertEquals(200.0, p.getProductPrice());
+        verify(priceHistoryRepository).save(any());
+    }
+
+    @Test
+    void bulkPriceUpdateRejectsAHeaderWithoutNewPrice() {
+        assertThrows(IllegalArgumentException.class, () -> service.bulkPriceUpdate(csv("productId,price\n1,5\n"), true));
+    }
+
     // ---------- bulkImportProducts ----------
 
     private void stubSavesToPassThrough() {
