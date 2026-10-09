@@ -104,6 +104,42 @@ class StockReportServiceTest {
     // ---------- reorder list ----------
 
     @Test
+    void recentChangesMergesCorrectionsAndRestocksNewestFirstWithProductNames() {
+        StockMovement older = movement(1, 5, 20, "RESTOCK", "supplier delivery");
+        older.setCreatedAt(NOW.minusSeconds(7200));
+        StockMovement newer = movement(2, 6, -3, "CORRECTION", "damaged");
+        newer.setCreatedAt(NOW.minusSeconds(60));
+        when(movements.search(any(), any(), eq(null), eq("CORRECTION"), any())).thenReturn(List.of(newer));
+        when(movements.search(any(), any(), eq(null), eq("RESTOCK"), any())).thenReturn(List.of(older));
+        when(products.findAllById(any())).thenReturn(List.of(product(5, "Soap", 30, 0), product(6, "Rice", 7, 0)));
+
+        List<com.example.productservice.dto.RecentStockChange> changes = service().recentChanges(24);
+
+        assertEquals(List.of("Rice", "Soap"), changes.stream().map(c -> c.productName()).toList());
+        assertEquals("CORRECTION", changes.get(0).type());
+        assertEquals(-3, changes.get(0).delta());
+    }
+
+    @Test
+    void recentChangesLooksBackTheRequestedHoursAndOnlyAtHandMadeTypes() {
+        when(movements.search(any(), any(), eq(null), any(), any())).thenReturn(List.of());
+        org.mockito.ArgumentCaptor<Instant> from = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.ArgumentCaptor<String> type = org.mockito.ArgumentCaptor.forClass(String.class);
+
+        assertTrue(service().recentChanges(6).isEmpty());
+
+        org.mockito.Mockito.verify(movements, org.mockito.Mockito.times(2)).search(from.capture(), any(), eq(null), type.capture(), any());
+        assertEquals(List.of("CORRECTION", "RESTOCK"), type.getAllValues());
+        assertEquals(NOW.plusSeconds(1).minusSeconds(6 * 3600), from.getValue());
+    }
+
+    @Test
+    void recentChangesRejectsAnOutOfRangeWindow() {
+        assertThrows(IllegalArgumentException.class, () -> service().recentChanges(0));
+        assertThrows(IllegalArgumentException.class, () -> service().recentChanges(169));
+    }
+
+    @Test
     void reorderListSuggestsWhatSellsOutSoonAndHowMuchToOrder() {
         // 30 sold over 30 days = 1/day. Soap has 5 left (5 days of cover): order enough for 30 days = 25 more.
         when(movements.netOrderChangeSince(any())).thenReturn(java.util.Collections.singletonList(new Object[]{1, -30L}));

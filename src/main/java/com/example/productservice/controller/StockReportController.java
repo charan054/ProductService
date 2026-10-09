@@ -1,5 +1,6 @@
 package com.example.productservice.controller;
 
+import com.example.productservice.dto.RecentStockChange;
 import com.example.productservice.dto.ReorderSuggestion;
 import com.example.productservice.service.StockReportService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -37,6 +38,12 @@ public class StockReportController {
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=\"stock-movements-" + start + "-to-" + end + ".csv\"")
                 .body(reports.exportCsv(start, end, productId, type));
+    }
+
+    // Corrections and restock receipts of the last N hours (default 24, max 168), newest first - the admin digest.
+    @GetMapping("/stock-movements/recent")
+    public List<RecentStockChange> recentChanges(@RequestParam(defaultValue = "24") int hours) {
+        return reports.recentChanges(hours);
     }
 
     // What to restock: out, under threshold, or selling out within two weeks, with a suggested quantity.

@@ -168,6 +168,14 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void recentStockChangesNeedTheKeyAndRejectABadWindow() throws Exception {
+        mockMvc.perform(get("/product/stock-movements/recent")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/product/stock-movements/recent").header("X-Service-Key", VALID_KEY)).andExpect(status().isOk());
+        mockMvc.perform(get("/product/stock-movements/recent").param("hours", "0").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void deleteWithoutKeyIsUnauthorized() throws Exception {
         mockMvc.perform(delete("/product/delete").param("id", "1"))
                 .andExpect(status().isUnauthorized());

@@ -1,5 +1,6 @@
 package com.example.productservice.service;
 
+import com.example.productservice.dto.RecentStockChange;
 import com.example.productservice.dto.ReorderSuggestion;
 import com.example.productservice.entity.Product;
 import com.example.productservice.entity.StockMovement;
@@ -70,6 +71,36 @@ public class StockReportService {
                     .append(cell(m.getReference())).append(',').append(cell(m.getReason())).append(',').append(cell(m.getActor())).append('\n');
         }
         return csv.toString();
+    }
+
+    static final int MAX_RECENT_HOURS = 168;
+    static final int MAX_RECENT_ROWS = 200;
+
+    /**
+     * The hand-made stock changes of the last {@code hours} hours - corrections and restock receipts, not sales,
+     * cancels or returns - newest first, for the admin digest. Capped at {@value #MAX_RECENT_ROWS} rows.
+     */
+    @Transactional(readOnly = true)
+    public List<RecentStockChange> recentChanges(int hours) {
+        if (hours < 1 || hours > MAX_RECENT_HOURS) {
+            throw new IllegalArgumentException("hours must be between 1 and " + MAX_RECENT_HOURS);
+        }
+        Instant to = clock.instant().plusSeconds(1);
+        Instant from = to.minus(Duration.ofHours(hours));
+        List<StockMovement> rows = new java.util.ArrayList<>();
+        for (String type : List.of(StockMovement.CORRECTION, StockMovement.RESTOCK)) {
+            rows.addAll(movements.search(from, to, null, type, PageRequest.of(0, MAX_RECENT_ROWS)));
+        }
+        rows.sort(Comparator.comparing(StockMovement::getCreatedAt, Comparator.nullsLast(Comparator.<Instant>reverseOrder()))
+                .thenComparing(StockMovement::getId, Comparator.reverseOrder()));
+        List<StockMovement> kept = rows.size() > MAX_RECENT_ROWS ? rows.subList(0, MAX_RECENT_ROWS) : rows;
+        Map<Integer, String> names = new HashMap<>();
+        products.findAllById(kept.stream().map(StockMovement::getProductId).filter(Objects::nonNull).distinct().toList())
+                .forEach(p -> names.put(p.getProductId().intValue(), p.getProductName()));
+        return kept.stream()
+                .map(m -> new RecentStockChange(m.getProductId(), names.getOrDefault(m.getProductId(), "(deleted product)"),
+                        m.getType(), m.getDelta(), m.getStockAfter(), m.getReason(), m.getReference(), m.getActor(), m.getCreatedAt()))
+                .toList();
     }
 
     /**
