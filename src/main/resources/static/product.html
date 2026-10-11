@@ -1445,6 +1445,17 @@
     showStatus("Flagged reviews loaded successfully. Result opened in new tab.", "success");
     openResultTab("Flagged Reviews", data.content || data);
   }
+  // Arriving from the OrderService dashboard's "Missed Searches" with ?newProduct=<what shoppers searched for>:
+  // pre-fill the Add Product name and jump to the form so the owner only has to add category, price and stock.
+  (function prefillNewProduct() {
+    const wanted = new URLSearchParams(location.search).get("newProduct");
+    const field = document.getElementById("addProductName");
+    if (!wanted || !field) return;
+    field.value = wanted.trim().slice(0, 100);
+    field.scrollIntoView({ block: "center" });
+    const next = document.getElementById("addCategory");
+    if (next) next.focus();
+  })();
 </script>
 </body>
 </html>
