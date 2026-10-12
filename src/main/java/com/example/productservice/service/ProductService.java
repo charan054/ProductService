@@ -398,6 +398,24 @@ public class ProductService {
         return productRepository.save(product);
     }
 
+    // Sets (or clears, with costPrice null) what one unit costs the shop.
+    public Product updateCost(int id, Double costPrice) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        if (costPrice != null && (costPrice.isNaN() || costPrice.isInfinite() || costPrice < 0)) {
+            throw new IllegalArgumentException("Cost price must be zero or more");
+        }
+        product.setCostPrice(costPrice);
+        return productRepository.save(product);
+    }
+
+    // Every product that has a cost price set, with its current selling price.
+    public List<com.example.productservice.dto.ProductCost> costs() {
+        return productRepository.findAll().stream()
+                .filter(p -> p.getCostPrice() != null)
+                .map(p -> new com.example.productservice.dto.ProductCost(p.getProductId(), p.getProductName(), p.getProductPrice(), p.getCostPrice()))
+                .toList();
+    }
+
     static final int MAX_VARIANTS_PER_GROUP = 30;
 
     public List<Product> findVariantGroupMembers(String variantGroup) {

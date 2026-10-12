@@ -36,6 +36,10 @@ public class Product {
     // GST rate in percent, one of the standard slabs (see ProductService.GST_RATES). Catalog prices INCLUDE GST; this
     // only says how much of the price is tax, for the invoice. Null = the store's default rate (OrderService decides).
     private Double gstRate;
+    // What one unit costs the shop. Staff-only: @JsonIgnore keeps it out of every catalog response (those are public),
+    // and it is set through PUT /product/updateCost and read back through GET /product/costs (both X-Service-Key).
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Double costPrice;
     // Optional HSN code (4-8 digits) printed on the invoice next to the product.
     @Column(length = 8)
     private String hsnCode;
