@@ -135,6 +135,15 @@ public class ProductController {
                                     @RequestParam(required = false) String hsnCode){
         return productService.updateTax(id, gstRate, hsnCode);
     }
+    // Both X-Service-Key (the default rule): what a unit costs the shop is never part of a public catalog response.
+    @PutMapping("/updateCost")
+    public Product updateProductCost(@RequestParam Integer id, @RequestParam(required = false) Double costPrice){
+        return productService.updateCost(id, costPrice);
+    }
+    @GetMapping("/costs")
+    public List<com.example.productservice.dto.ProductCost> getCosts(){
+        return productService.costs();
+    }
     // Same public trust level as the other catalog-browsing GETs above.
     @GetMapping("/priceHistory")
     public List<PriceHistory> getPriceHistory(@RequestParam Integer id){

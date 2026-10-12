@@ -90,6 +90,32 @@ class ProductControllerSecurityTest {
     }
 
     @Test
+    void costEndpointsNeedTheServiceKey() throws Exception {
+        mockMvc.perform(put("/product/updateCost").param("id", "1").param("costPrice", "5")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/product/costs")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/product/costs").header("X-Service-Key", VALID_KEY)).andExpect(status().isOk());
+    }
+
+    // What a unit costs the shop must never appear in a public catalog response, even after it has been set.
+    @Test
+    void costPriceNeverAppearsInPublicCatalogResponses() throws Exception {
+        String created = mockMvc.perform(post("/product/add").contentType(MediaType.APPLICATION_JSON).content(NEW_PRODUCT)
+                        .header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String id = created.replaceAll(".*\"productId\":(\\d+).*", "$1");
+        mockMvc.perform(put("/product/updateCost").param("id", id).param("costPrice", "4.5").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk());
+
+        String catalog = mockMvc.perform(get("/product/all")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String single = mockMvc.perform(get("/product/byId").param("id", id)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(catalog.contains("costPrice"));
+        org.junit.jupiter.api.Assertions.assertFalse(single.contains("costPrice"));
+        String costs = mockMvc.perform(get("/product/costs").header("X-Service-Key", VALID_KEY)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(costs.contains("\"costPrice\":4.5"));
+    }
+
+    @Test
     void updateTaxWithoutKeyIsUnauthorized() throws Exception {
         mockMvc.perform(put("/product/updateTax").param("id", "1").param("gstRate", "18"))
                 .andExpect(status().isUnauthorized());

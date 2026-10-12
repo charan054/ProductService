@@ -836,6 +836,29 @@ class ProductServiceTest {
     }
 
     @Test
+    void updateCostSetsClearsAndRejectsNegatives() {
+        Product existing = stored(1, 100.0, 5);
+        when(productRepository.findById(1)).thenReturn(Optional.of(existing));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals(60.0, service.updateCost(1, 60.0).getCostPrice());
+        assertNull(service.updateCost(1, null).getCostPrice());
+        assertThrows(IllegalArgumentException.class, () -> service.updateCost(1, -1.0));
+        assertThrows(IllegalArgumentException.class, () -> service.updateCost(1, Double.NaN));
+    }
+
+    @Test
+    void costsListsOnlyProductsWithACost() {
+        Product withCost = stored(1, 100.0, 5);
+        withCost.setCostPrice(70.0);
+        Product without = stored(2, 50.0, 5);
+        when(productRepository.findAll()).thenReturn(List.of(withCost, without));
+
+        assertEquals(1, service.costs().size());
+        assertEquals(70.0, service.costs().get(0).costPrice());
+    }
+
+    @Test
     void updateTaxThrowsForAnUnknownProduct() {
         when(productRepository.findById(1)).thenReturn(Optional.empty());
         assertThrows(ItemNotFoundException.class, () -> service.updateTax(1, 18.0, null));
