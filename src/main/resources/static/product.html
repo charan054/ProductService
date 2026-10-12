@@ -381,6 +381,20 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🏷️</div>
+        <div class="title-wrap">
+          <h2>Product Cost</h2>
+          <span class="method">PUT</span>
+        </div>
+      </div>
+      <p>What one unit costs you. Never shown to customers; used to warn when a coupon would sell a product below cost. Leave the cost blank to clear it.</p>
+      <input type="number" id="costProductId" placeholder="Product ID" />
+      <input type="number" id="costPrice" min="0" step="0.01" placeholder="Cost per unit (blank = clear)" />
+      <button class="green" onclick="updateProductCost()">Save Cost</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">🎛️</div>
         <div class="title-wrap">
           <h2>Product Options (variants)</h2>
@@ -1017,6 +1031,18 @@
     const data = await apiCall(`${BASE_URL}/updateTax?${params}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
     showStatus(`GST saved for product ${id}.`, "success");
     openResultTab("Product GST", data);
+  }
+
+  async function updateProductCost() {
+    const id = document.getElementById("costProductId").value.trim();
+    if (!id) return showStatus("Please enter a product ID.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const params = new URLSearchParams({ id });
+    const cost = document.getElementById("costPrice").value.trim();
+    if (cost !== "") params.set("costPrice", cost);
+    const data = await apiCall(`${BASE_URL}/updateCost?${params}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
+    if (data) showStatus(cost === "" ? `Cost cleared for product ${id}.` : `Cost saved for product ${id}.`, "success");
   }
 
   async function bulkImportProducts() {
