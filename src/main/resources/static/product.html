@@ -269,6 +269,21 @@
         width: min(100% - 24px, 1180px);
       }
     }
+
+    /* ---- photo manager ---- */
+    .photo-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    .photo-table th, .photo-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+    .photo-thumb { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; background: #f1f5f9; display: block; }
+    .photo-thumb.none { display: flex; align-items: center; justify-content: center; font-size: 22px; color: #94a3b8; }
+    .photo-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #e2e8f0; color: #475569; }
+    .photo-badge.ok { background: #dcfce7; color: #15803d; }
+    .photo-badge.bad { background: #fee2e2; color: #b91c1c; }
+    .photo-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .photo-actions input[type=text] { width: 180px; margin: 0; padding: 7px 10px; }
+    .photo-actions input[type=file] { max-width: 190px; font-size: 12px; margin: 0; }
+    .photo-actions button { width: auto; margin: 0; padding: 7px 12px; font-size: 13px; }
+    .photo-summary { margin-top: 10px; font-weight: 700; }
+    @media (max-width: 700px) { .photo-table th:nth-child(3), .photo-table td:nth-child(3) { display: none; } }
   </style>
 </head>
 <body>
@@ -408,9 +423,27 @@
       <button class="green" onclick="updateProductVariant()">Save Option</button>
     </div>
 
+    <div class="card" style="grid-column: 1 / -1;" id="card-photomanager">
+      <div class="card-header">
+        <div class="icon">&#128247;</div>
+        <div class="title-wrap">
+          <h2>Photo Manager</h2>
+          <span class="method">GET</span>
+        </div>
+      </div>
+      <p>See every product's cover photo at a glance. Photos that are missing, broken or only a 1-pixel stand-in are flagged - upload a file or paste a link right in the row. Requires the Service Key above to change anything.</p>
+      <button style="width:auto;" onclick="loadPhotoManager()">Load products</button>
+      <label style="margin-left:10px; font-size:14px;"><input type="checkbox" id="photoOnlyBad" checked onchange="applyPhotoFilter()" /> Only products that need a photo</label>
+      <div class="photo-summary" id="photoSummary"></div>
+      <div class="input-table-wrap"><table class="photo-table" id="photoTable" style="display:none;">
+        <thead><tr><th>Photo</th><th>Product</th><th>Category</th><th>Status</th><th>Change photo</th></tr></thead>
+        <tbody id="photoRows"></tbody>
+      </table></div>
+    </div>
+
     <div class="card">
       <div class="card-header">
-        <div class="icon">🖼️</div>
+        <div class="icon">&#128444;&#65039;</div>
         <div class="title-wrap">
           <h2>Upload Product Image</h2>
           <span class="method">POST</span>
@@ -1088,6 +1121,82 @@
       + data.rows.map(r => `<tr style="${r.largeChange || r.status === "ERROR" ? "color:#b45309;" : ""}"><td>${r.rowNumber}</td><td>${esc(r.productId)} ${esc(r.productName)}</td><td>${esc(r.oldPrice)}</td><td>${esc(r.newPrice)}</td><td>${esc(r.status)}</td><td>${esc(r.message)}</td></tr>`).join("")
       + `</table>`;
     showStatus(data.dryRun ? "Preview ready - tick Apply and upload again to save." : "Prices updated.", "success");
+  }
+
+  // Photo manager: one row per product with its cover photo, a status found by actually loading the picture
+  // (missing / broken link / a tiny stand-in), and an upload-or-paste-a-link control per row.
+  let photoRowsData = [];
+  function photoStatusOf(url) {
+    return new Promise(resolve => {
+      if (!url) return resolve("missing");
+      const img = new Image();
+      const timer = setTimeout(() => resolve("broken"), 8000);
+      img.onload = () => { clearTimeout(timer); resolve(img.naturalWidth < 16 || img.naturalHeight < 16 ? "tiny" : "ok"); };
+      img.onerror = () => { clearTimeout(timer); resolve("broken"); };
+      img.src = url;
+    });
+  }
+  const PHOTO_LABEL = { ok: "Has photo", missing: "No photo", broken: "Link is broken", tiny: "Only a 1-pixel stand-in", checking: "Checking..." };
+
+  async function loadPhotoManager() {
+    const response = await fetch(`${BASE_URL}/all`);
+    if (!response.ok) return showStatus("Could not load the products.", "error");
+    const products = await response.json();
+    photoRowsData = products.map(p => ({ product: p, status: "checking" }));
+    renderPhotoRows();
+    document.getElementById("photoTable").style.display = "table";
+    await Promise.all(photoRowsData.map(async row => {
+      row.status = await photoStatusOf(row.product.productImageUrl);
+      renderPhotoRows();
+    }));
+  }
+
+  function applyPhotoFilter() { renderPhotoRows(); }
+
+  function renderPhotoRows() {
+    const onlyBad = document.getElementById("photoOnlyBad").checked;
+    const shown = photoRowsData.filter(r => !onlyBad || r.status !== "ok");
+    const needing = photoRowsData.filter(r => r.status !== "ok" && r.status !== "checking").length;
+    document.getElementById("photoSummary").textContent = photoRowsData.length
+      ? `${photoRowsData.length} products - ${needing} need a photo${photoRowsData.some(r => r.status === "checking") ? " (checking the rest...)" : ""}`
+      : "";
+    document.getElementById("photoRows").innerHTML = shown.map(({ product: p, status }) => `
+      <tr>
+        <td>${p.productImageUrl && status === "ok"
+          ? `<img class="photo-thumb" src="${escapeHtml(p.productImageUrl)}" alt="" loading="lazy" />`
+          : `<span class="photo-thumb none">&#128247;</span>`}</td>
+        <td><strong>${escapeHtml(p.productName)}</strong><br><span style="color:var(--muted); font-size:12px;">#${p.productId}</span></td>
+        <td>${escapeHtml(p.productCategory || "")}</td>
+        <td><span class="photo-badge ${status === "ok" ? "ok" : status === "checking" ? "" : "bad"}">${PHOTO_LABEL[status]}</span></td>
+        <td><div class="photo-actions">
+          <input type="file" id="photoFile${p.productId}" accept="image/jpeg,image/png,image/gif,image/webp" />
+          <button class="green" onclick="photoUpload(${p.productId})">Upload</button>
+          <input type="text" id="photoUrl${p.productId}" placeholder="or paste an image link" />
+          <button onclick="photoSetUrl(${p.productId})">Set link</button>
+        </div></td>
+      </tr>`).join("");
+  }
+
+  async function photoUpload(productId) {
+    const file = document.getElementById("photoFile" + productId).files[0];
+    if (!file) return showStatus("Choose an image file for that product first.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    await apiCall(`${BASE_URL}/${encodeURIComponent(productId)}/image`, { method: "POST", headers: { "X-Service-Key": serviceKey }, body: formData });
+    showStatus(`Photo uploaded for product #${productId}.`, "success");
+    await loadPhotoManager();
+  }
+
+  async function photoSetUrl(productId) {
+    const url = document.getElementById("photoUrl" + productId).value.trim();
+    if (!url) return showStatus("Paste an image link for that product first.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    await apiCall(`${BASE_URL}/updateImageUrl?id=${encodeURIComponent(productId)}&imageUrl=${encodeURIComponent(url)}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
+    showStatus(`Photo link set for product #${productId}.`, "success");
+    await loadPhotoManager();
   }
 
   async function uploadProductImage() {
