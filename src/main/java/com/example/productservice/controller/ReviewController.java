@@ -1,5 +1,6 @@
 package com.example.productservice.controller;
 
+import com.example.productservice.dto.PageResponse;
 import com.example.productservice.dto.PublicReview;
 import com.example.productservice.dto.RatingSummary;
 import com.example.productservice.entity.Review;
@@ -35,19 +36,19 @@ public class ReviewController {
     }
 
     @GetMapping("/{productId}/reviews")
-    public Page<PublicReview> getReviews(@PathVariable Long productId,
+    public PageResponse<PublicReview> getReviews(@PathVariable Long productId,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return reviewService.listReviews(productId, PageRequest.of(page, size)).map(PublicReview::from);
+        return PageResponse.of(reviewService.listReviews(productId, PageRequest.of(page, size)).map(PublicReview::from));
     }
 
     // Full reviews including reviewerPhno, X-Service-Key only (the path has 4 segments so none of the public
     // "/product/*/reviews" matchers apply). OrderService uses it to compute the Verified-purchase badge.
     @GetMapping("/internal/{productId}/reviews")
-    public Page<Review> getReviewsInternal(@PathVariable Long productId,
+    public PageResponse<Review> getReviewsInternal(@PathVariable Long productId,
                                            @RequestParam(defaultValue = "0") int page,
                                            @RequestParam(defaultValue = "20") int size) {
-        return reviewService.listReviews(productId, PageRequest.of(page, size));
+        return PageResponse.of(reviewService.listReviews(productId, PageRequest.of(page, size)));
     }
 
     @GetMapping("/{productId}/rating-summary")
@@ -88,9 +89,9 @@ public class ReviewController {
     }
 
     @GetMapping("/reviews/flagged")
-    public Page<Review> getFlaggedReviews(@RequestParam(defaultValue = "0") int page,
+    public PageResponse<Review> getFlaggedReviews(@RequestParam(defaultValue = "0") int page,
                                            @RequestParam(defaultValue = "20") int size) {
-        return reviewService.getFlaggedReviews(PageRequest.of(page, size));
+        return PageResponse.of(reviewService.getFlaggedReviews(PageRequest.of(page, size)));
     }
 
     // Public, same customer-generated-content trust level as browsing reviews - a count, not any one review's

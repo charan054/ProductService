@@ -1,5 +1,6 @@
 package com.example.productservice.controller;
 
+import com.example.productservice.dto.PageResponse;
 import com.example.productservice.dto.BulkImportResult;
 import com.example.productservice.dto.PriceUpdateResult;
 import com.example.productservice.entity.PriceHistory;
@@ -73,7 +74,7 @@ public class ProductController {
         return productService.findAll();
     }
     @GetMapping("/search")
-    public Page<Product> searchProducts(
+    public PageResponse<Product> searchProducts(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) Double minPrice,
@@ -87,7 +88,7 @@ public class ProductController {
         }
         Sort sort = "desc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
-        return productService.search(name, category, minPrice, maxPrice, pageable);
+        return PageResponse.of(productService.search(name, category, minPrice, maxPrice, pageable));
     }
     @GetMapping("/byId")
     public Product getProductById(@RequestParam Integer id){
