@@ -285,6 +285,22 @@
     .photo-actions button { width: auto; margin: 0; padding: 7px 12px; font-size: 13px; }
     .photo-summary { margin-top: 10px; font-weight: 700; }
     @media (max-width: 700px) { .photo-table th:nth-child(3), .photo-table td:nth-child(3) { display: none; } }
+    /* ---- dark mode: follows the device setting; the page is light by default ---- */
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme: dark; --white: #111c2e; --dark: #e2e8f0; --muted: #94a3b8; --border: #27364d; --shadow: 0 18px 45px rgba(0, 0, 0, 0.45); }
+      .card { border-color: #27364d; }
+      .icon, .method { background: #12294a; color: #93c5fd; }
+      input, select, textarea { background: #0b1626; color: #e2e8f0; border-color: #27364d; }
+      input:focus, select:focus, textarea:focus { background: #0f1b30; }
+      input::placeholder { color: #64748b; }
+      .input-table th { background: #12294a; color: #93c5fd; }
+      .input-table td { background: #111c2e; }
+      .status-panel { background: #111c2e; color: #bfdbfe; }
+      .photo-thumb { background: #1e293b; }
+      .photo-badge { background: #1e293b; color: #cbd5e1; }
+      .photo-badge.ok { background: #052e16; color: #86efac; }
+      .photo-badge.bad { background: #450a0a; color: #fca5a5; }
+    }
   </style>
 </head>
 <body>
