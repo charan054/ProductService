@@ -141,6 +141,17 @@ public class ProductController {
     public Product updateProductCost(@RequestParam Integer id, @RequestParam(required = false) Double costPrice){
         return productService.updateCost(id, costPrice);
     }
+    // X-Service-Key (the default rule). from/to are ISO instants, e.g. 2026-10-20T00:00:00Z; from defaults to now.
+    @PutMapping("/sale")
+    public Product setSale(@RequestParam Integer id, @RequestParam Double price,
+                           @RequestParam(required = false) java.time.Instant from,
+                           @RequestParam java.time.Instant to){
+        return productService.setSale(id, price, from == null ? java.time.Instant.now() : from, to);
+    }
+    @DeleteMapping("/sale")
+    public Product clearSale(@RequestParam Integer id){
+        return productService.clearSale(id);
+    }
     @GetMapping("/costs")
     public List<com.example.productservice.dto.ProductCost> getCosts(){
         return productService.costs();
