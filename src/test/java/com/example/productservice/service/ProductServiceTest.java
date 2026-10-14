@@ -436,6 +436,51 @@ class ProductServiceTest {
         assertEquals(500, page.getValue().getPageSize());
     }
 
+    // ---------- timed sale ----------
+
+    @Test
+    void setSaleStoresThePriceAndWindow() {
+        Product p = stored(1, 100, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+        java.time.Instant from = java.time.Instant.now();
+        java.time.Instant to = from.plusSeconds(3600);
+
+        Product saved = service.setSale(1, 80, from, to);
+
+        assertEquals(80.0, saved.getSalePrice());
+        assertEquals(to, saved.getSaleEndsAt());
+        assertEquals(100.0, saved.getProductPrice());
+    }
+
+    @Test
+    void setSaleRejectsBadInput() {
+        Product p = stored(1, 100, 10);
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        java.time.Instant now = java.time.Instant.now();
+
+        assertThrows(PriceException.class, () -> service.setSale(1, 100, now, now.plusSeconds(60)));
+        assertThrows(PriceException.class, () -> service.setSale(1, 0, now, now.plusSeconds(60)));
+        assertThrows(IllegalArgumentException.class, () -> service.setSale(1, 50, now, now));
+        assertThrows(IllegalArgumentException.class, () -> service.setSale(1, 50, now.minusSeconds(120), now.minusSeconds(60)));
+        verify(productRepository, never()).save(any());
+    }
+
+    @Test
+    void clearSaleRemovesTheSale() {
+        Product p = stored(1, 100, 10);
+        p.setSalePrice(80.0);
+        p.setSaleStartsAt(java.time.Instant.now());
+        p.setSaleEndsAt(java.time.Instant.now().plusSeconds(60));
+        when(productRepository.findById(1)).thenReturn(Optional.of(p));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Product saved = service.clearSale(1);
+
+        assertNull(saved.getSalePrice());
+        assertNull(saved.getSaleEndsAt());
+    }
+
     // ---------- updatePrice ----------
 
     @Test

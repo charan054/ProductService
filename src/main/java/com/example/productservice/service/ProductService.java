@@ -717,6 +717,36 @@ public class ProductService {
         return saved;
     }
 
+    // Sets or replaces the product's timed sale. The sale must end in the future, start before it ends, and cost
+    // less than the regular price (a "sale" at or above the regular price is almost certainly a typo).
+    public Product setSale(int id, double salePrice, Instant startsAt, Instant endsAt) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        if (Double.isNaN(salePrice) || Double.isInfinite(salePrice) || salePrice <= 0) {
+            throw new PriceException("Sale price must be greater than 0");
+        }
+        if (salePrice >= product.getProductPrice()) {
+            throw new PriceException("Sale price must be lower than the regular price (" + product.getProductPrice() + ")");
+        }
+        if (startsAt == null || endsAt == null || !endsAt.isAfter(startsAt)) {
+            throw new IllegalArgumentException("The sale must end after it starts");
+        }
+        if (!endsAt.isAfter(Instant.now())) {
+            throw new IllegalArgumentException("The sale must end in the future");
+        }
+        product.setSalePrice(salePrice);
+        product.setSaleStartsAt(startsAt);
+        product.setSaleEndsAt(endsAt);
+        return productRepository.save(product);
+    }
+
+    public Product clearSale(int id) {
+        Product product = productRepository.findById(id).orElseThrow(() -> new ItemNotFoundException("Product not found"));
+        product.setSalePrice(null);
+        product.setSaleStartsAt(null);
+        product.setSaleEndsAt(null);
+        return productRepository.save(product);
+    }
+
     // Newest first, same convention as every other history/timeline endpoint in this codebase.
     public List<PriceHistory> getPriceHistory(int id) {
         findById(id);

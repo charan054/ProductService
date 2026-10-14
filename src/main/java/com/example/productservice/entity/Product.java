@@ -28,6 +28,9 @@ public class Product {
     private String productCategory;
     // Optional; a plain URL rather than stored binary data - no file upload/storage infra in scope here.
     private String productImageUrl;
+    // The regular price. Code that edits prices (updatePrice, bulk update, history) works on this field; what the
+    // catalog JSON calls "productPrice" is livePrice(), which is the sale price while a sale is running.
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private double productPrice;
     private int productStock;
     // Alerts fire (see ProductService.updateStock/save) when stock drops to or below this. Defaults to 5 when a
@@ -57,4 +60,39 @@ public class Product {
     // "new", which is also true.
     private java.time.Instant createdAt;
 
+    // Optional timed sale (set through PUT /product/sale, never from a request body). While now is in
+    // [saleStartsAt, saleEndsAt) the catalog reports salePrice as productPrice, so cart, checkout and every other
+    // reader of the catalog charge it without knowing about sales.
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private Double salePrice;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private java.time.Instant saleStartsAt;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private java.time.Instant saleEndsAt;
+
+    public boolean saleLiveAt(java.time.Instant now) {
+        return salePrice != null && saleStartsAt != null && saleEndsAt != null
+                && !now.isBefore(saleStartsAt) && now.isBefore(saleEndsAt);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("productPrice")
+    public double livePrice() {
+        return saleLiveAt(java.time.Instant.now()) ? salePrice : productPrice;
+    }
+
+    // Always the regular price, so the storefront can show it struck through during a sale.
+    @com.fasterxml.jackson.annotation.JsonProperty("regularPrice")
+    public double regularPrice() {
+        return productPrice;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("onSale")
+    public boolean onSale() {
+        return saleLiveAt(java.time.Instant.now());
+    }
+
+    @com.fasterxml.jackson.annotation.JsonSetter("productPrice")
+    public void setProductPriceFromJson(double price) {
+        this.productPrice = price;
+    }
 }

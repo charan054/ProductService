@@ -396,6 +396,23 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="icon">🔥</div>
+        <div class="title-wrap">
+          <h2>Timed Sale</h2>
+          <span class="method">PUT</span>
+        </div>
+      </div>
+      <p>Show a lower price between two times. The regular price comes back on its own when the sale ends. Times are in your local time zone; leave "From" blank to start now. Use Clear Sale to end one early.</p>
+      <input type="number" id="saleProductId" placeholder="Product ID" />
+      <input type="number" id="salePrice" min="0" step="0.01" placeholder="Sale price" />
+      <label>From <input type="datetime-local" id="saleFrom" /></label>
+      <label>To <input type="datetime-local" id="saleTo" /></label>
+      <button class="green" onclick="setProductSale()">Start Sale</button>
+      <button class="red-btn" onclick="clearProductSale()">Clear Sale</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="icon">🏷️</div>
         <div class="title-wrap">
           <h2>Product Cost</h2>
@@ -1064,6 +1081,32 @@
     const data = await apiCall(`${BASE_URL}/updateTax?${params}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
     showStatus(`GST saved for product ${id}.`, "success");
     openResultTab("Product GST", data);
+  }
+
+  async function setProductSale() {
+    const id = document.getElementById("saleProductId").value.trim();
+    const price = document.getElementById("salePrice").value.trim();
+    const from = document.getElementById("saleFrom").value;
+    const to = document.getElementById("saleTo").value;
+    if (!id || !price || !to) return showStatus("Product ID, sale price and an end time are required.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const params = new URLSearchParams({ id, price, to: new Date(to).toISOString() });
+    if (from) params.set("from", new Date(from).toISOString());
+    const data = await apiCall(`${BASE_URL}/sale?${params}`, { method: "PUT", headers: { "X-Service-Key": serviceKey } });
+    if (data) {
+      showStatus(`Sale saved for product ${id}.`, "success");
+      openResultTab("Timed Sale", data);
+    }
+  }
+
+  async function clearProductSale() {
+    const id = document.getElementById("saleProductId").value.trim();
+    if (!id) return showStatus("Please enter a product ID.", "error");
+    const serviceKey = requireServiceKey();
+    if (!serviceKey) return;
+    const data = await apiCall(`${BASE_URL}/sale?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { "X-Service-Key": serviceKey } });
+    if (data) showStatus(`Sale cleared for product ${id}.`, "success");
   }
 
   async function updateProductCost() {
