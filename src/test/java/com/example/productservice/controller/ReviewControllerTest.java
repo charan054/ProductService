@@ -248,6 +248,36 @@ class ReviewControllerTest {
     }
 
     @Test
+    void helpfulVotesNeedTheServiceKeyAndFeedTheCountAndTheHelpfulSort() throws Exception {
+        long alice = addReview("Alice", 9999999999L, 5, "Great");
+        long bob = addReview("Bob", 9888888888L, 3, "Fine");
+
+        mockMvc.perform(put("/product/reviews/" + alice + "/helpful").param("voterPhno", "9777777777"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/product/reviews/" + alice + "/helpful").param("voterPhno", "9777777777").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.helpfulCount").value(1));
+        // your own review is refused
+        mockMvc.perform(put("/product/reviews/" + bob + "/helpful").param("voterPhno", "9888888888").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().is4xxClientError());
+
+        mockMvc.perform(get("/product/reviews/helpful/mine").param("voterPhno", "9777777777").header("X-Service-Key", VALID_KEY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value((int) alice));
+
+        // newest-first would put Bob (added second) on top; the other orders must move things around
+        mockMvc.perform(get("/product/" + productId + "/reviews").param("sort", "helpful"))
+                .andExpect(jsonPath("$.content[0].reviewId").value((int) alice))
+                .andExpect(jsonPath("$.content[0].helpfulCount").value(1));
+        mockMvc.perform(get("/product/" + productId + "/reviews").param("sort", "highest"))
+                .andExpect(jsonPath("$.content[0].reviewId").value((int) alice));
+        mockMvc.perform(get("/product/" + productId + "/reviews").param("sort", "lowest"))
+                .andExpect(jsonPath("$.content[0].reviewId").value((int) bob));
+        mockMvc.perform(get("/product/" + productId + "/reviews").param("sort", "bogus"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
     void hideReviewWithoutServiceKeyIsUnauthorized() throws Exception {
         long reviewId = addReview("Alice", 9999999999L, 5, "Great");
         mockMvc.perform(put("/product/" + productId + "/reviews/" + reviewId + "/hide"))

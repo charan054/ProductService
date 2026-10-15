@@ -5,10 +5,13 @@ import com.example.productservice.entity.Product;
 import com.example.productservice.entity.Review;
 import com.example.productservice.exception.ItemNotFoundException;
 import com.example.productservice.exception.ReviewException;
+import com.example.productservice.entity.ReviewVote;
 import com.example.productservice.repository.ReviewRepository;
+import com.example.productservice.repository.ReviewVoteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,8 @@ public class ReviewService {
     private ReviewRepository reviewRepository;
     @Autowired
     private ProductService productService;
+    @Autowired
+    private ReviewVoteRepository reviewVoteRepository;
 
     public Review addReview(Long productId, String reviewerName, long reviewerPhno, int rating, String comment) {
         return addReview(productId, reviewerName, reviewerPhno, rating, comment, null);
@@ -75,10 +80,67 @@ public class ReviewService {
     // belongs to the option that was bought - productId on it says which). An ordinary product just shows its own.
     public Page<Review> listReviews(Long productId, Pageable pageable) {
         List<Long> ids = reviewedProductIds(productId);
+        // A Pageable that already carries a Sort (see sortFor) picks the order; an unsorted one means newest first.
+        boolean sorted = pageable.getSort().isSorted();
         if (ids.size() > 1) {
-            return reviewRepository.findByProductIdInAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(ids, pageable);
+            return sorted ? reviewRepository.findByProductIdInAndHiddenFalse(ids, pageable)
+                    : reviewRepository.findByProductIdInAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(ids, pageable);
         }
-        return reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(productId, pageable);
+        return sorted ? reviewRepository.findByProductIdAndHiddenFalse(productId, pageable)
+                : reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(productId, pageable);
+    }
+
+    /**
+     * The order a client asked for: newest (the default), helpful (most helpful votes first), highest or lowest rating.
+     * Every order ends with newest-first so reviews that tie always come out in a stable order.
+     */
+    public static Sort sortFor(String sort) {
+        Sort newest = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("reviewId"));
+        String key = sort == null || sort.isBlank() ? "newest" : sort.trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (key) {
+            case "newest" -> newest;
+            case "helpful" -> Sort.by(Sort.Order.desc("helpfulCount")).and(newest);
+            case "highest" -> Sort.by(Sort.Order.desc("rating")).and(newest);
+            case "lowest" -> Sort.by(Sort.Order.asc("rating")).and(newest);
+            default -> throw new ReviewException("sort must be newest, helpful, highest or lowest");
+        };
+    }
+
+    /**
+     * Marks a review helpful (or takes the mark back). One vote per customer per review, never on your own review.
+     * helpfulCount is recounted from the votes, so repeating a call or two calls racing cannot make it drift.
+     */
+    @Transactional
+    public Review setHelpful(Long reviewId, long voterPhno, boolean helpful) {
+        String digits = String.valueOf(voterPhno);
+        if (digits.length() != 10 || !digits.matches("^[6-9].*")) {
+            throw new ReviewException("Invalid mobile number");
+        }
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ItemNotFoundException("Review not found"));
+        if (review.isHidden()) {
+            throw new ItemNotFoundException("Review not found");
+        }
+        if (review.getReviewerPhno() == voterPhno) {
+            throw new ReviewException("You can't mark your own review as helpful");
+        }
+        var existing = reviewVoteRepository.findByReviewIdAndVoterPhno(reviewId, voterPhno);
+        if (helpful && existing.isEmpty()) {
+            ReviewVote vote = new ReviewVote();
+            vote.setReviewId(reviewId);
+            vote.setVoterPhno(voterPhno);
+            reviewVoteRepository.saveAndFlush(vote);
+        } else if (!helpful && existing.isPresent()) {
+            reviewVoteRepository.delete(existing.get());
+            reviewVoteRepository.flush();
+        }
+        review.setHelpfulCount((int) reviewVoteRepository.countByReviewId(reviewId));
+        return reviewRepository.save(review);
+    }
+
+    // The ids of every review this customer has marked helpful, so a client can show which buttons are already pressed.
+    public List<Long> helpfulVotesOf(long voterPhno) {
+        return reviewVoteRepository.findReviewIdsByVoter(voterPhno);
     }
 
     // Same roll-up for the star rating: the average and count are over the whole group when there is one.

@@ -33,6 +33,8 @@ class ReviewServiceTest {
     private ReviewRepository reviewRepository;
     @Mock
     private ProductService productService;
+    @Mock
+    private com.example.productservice.repository.ReviewVoteRepository reviewVoteRepository;
     @InjectMocks
     private ReviewService service;
 
@@ -311,5 +313,88 @@ class ReviewServiceTest {
 
         assertEquals(3.0, summary.averageRating());
         verify(reviewRepository, never()).averageRatingForProducts(any());
+    }
+
+    // ---------- sorting and helpful votes ----------
+
+    @Test
+    void sortForDefaultsToNewestAndEveryOrderEndsNewestFirst() {
+        assertEquals("createdAt: DESC,reviewId: DESC", ReviewService.sortFor(null).toString());
+        assertEquals("createdAt: DESC,reviewId: DESC", ReviewService.sortFor("  ").toString());
+        assertEquals("helpfulCount: DESC,createdAt: DESC,reviewId: DESC", ReviewService.sortFor("HELPFUL").toString());
+        assertEquals("rating: DESC,createdAt: DESC,reviewId: DESC", ReviewService.sortFor("highest").toString());
+        assertEquals("rating: ASC,createdAt: DESC,reviewId: DESC", ReviewService.sortFor("lowest").toString());
+        assertThrows(ReviewException.class, () -> ReviewService.sortFor("random"));
+    }
+
+    @Test
+    void aSortedPageUsesTheSortableQueryAndAnUnsortedOneKeepsNewestFirst() {
+        when(productService.findById(1)).thenReturn(product(1));
+        var page = new PageImpl<>(List.of(review(10, 1, 9000000001L, 5)));
+        var sortedPage = PageRequest.of(0, 20, ReviewService.sortFor("helpful"));
+        when(reviewRepository.findByProductIdAndHiddenFalse(1L, sortedPage)).thenReturn(page);
+        when(reviewRepository.findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(1L, PageRequest.of(0, 20))).thenReturn(page);
+
+        assertEquals(1, service.listReviews(1L, sortedPage).getTotalElements());
+        assertEquals(1, service.listReviews(1L, PageRequest.of(0, 20)).getTotalElements());
+    }
+
+    @Test
+    void markingHelpfulStoresOneVoteAndRecountsFromTheVotes() {
+        Review r = review(10, 1, 9000000001L, 5);
+        when(reviewRepository.findById(10L)).thenReturn(Optional.of(r));
+        when(reviewVoteRepository.findByReviewIdAndVoterPhno(10L, 9000000002L)).thenReturn(Optional.empty());
+        when(reviewVoteRepository.countByReviewId(10L)).thenReturn(3L);
+        when(reviewRepository.save(r)).thenReturn(r);
+
+        Review out = service.setHelpful(10L, 9000000002L, true);
+
+        assertEquals(3, out.getHelpfulCount());
+        verify(reviewVoteRepository).saveAndFlush(any(com.example.productservice.entity.ReviewVote.class));
+    }
+
+    @Test
+    void votingTwiceDoesNotAddASecondVote() {
+        Review r = review(10, 1, 9000000001L, 5);
+        when(reviewRepository.findById(10L)).thenReturn(Optional.of(r));
+        when(reviewVoteRepository.findByReviewIdAndVoterPhno(10L, 9000000002L))
+                .thenReturn(Optional.of(new com.example.productservice.entity.ReviewVote()));
+        when(reviewVoteRepository.countByReviewId(10L)).thenReturn(1L);
+        when(reviewRepository.save(r)).thenReturn(r);
+
+        service.setHelpful(10L, 9000000002L, true);
+
+        verify(reviewVoteRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void takingTheMarkBackDeletesTheVote() {
+        Review r = review(10, 1, 9000000001L, 5);
+        var vote = new com.example.productservice.entity.ReviewVote();
+        when(reviewRepository.findById(10L)).thenReturn(Optional.of(r));
+        when(reviewVoteRepository.findByReviewIdAndVoterPhno(10L, 9000000002L)).thenReturn(Optional.of(vote));
+        when(reviewVoteRepository.countByReviewId(10L)).thenReturn(0L);
+        when(reviewRepository.save(r)).thenReturn(r);
+
+        Review out = service.setHelpful(10L, 9000000002L, false);
+
+        assertEquals(0, out.getHelpfulCount());
+        verify(reviewVoteRepository).delete(vote);
+    }
+
+    @Test
+    void youCannotMarkYourOwnOrAHiddenOrAMissingReviewHelpful() {
+        Review own = review(10, 1, 9000000001L, 5);
+        Review hidden = review(11, 1, 9000000003L, 5);
+        hidden.setHidden(true);
+        when(reviewRepository.findById(10L)).thenReturn(Optional.of(own));
+        when(reviewRepository.findById(11L)).thenReturn(Optional.of(hidden));
+        when(reviewRepository.findById(12L)).thenReturn(Optional.empty());
+
+        assertThrows(ReviewException.class, () -> service.setHelpful(10L, 9000000001L, true));
+        assertThrows(ItemNotFoundException.class, () -> service.setHelpful(11L, 9000000002L, true));
+        assertThrows(ItemNotFoundException.class, () -> service.setHelpful(12L, 9000000002L, true));
+        assertThrows(ReviewException.class, () -> service.setHelpful(10L, 12345L, true));
+        verify(reviewVoteRepository, never()).saveAndFlush(any());
     }
 }
