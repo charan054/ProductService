@@ -38,8 +38,9 @@ public class ReviewController {
     @GetMapping("/{productId}/reviews")
     public PageResponse<PublicReview> getReviews(@PathVariable Long productId,
                                           @RequestParam(defaultValue = "0") int page,
-                                          @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.of(reviewService.listReviews(productId, PageRequest.of(page, size)).map(PublicReview::from));
+                                          @RequestParam(defaultValue = "20") int size,
+                                          @RequestParam(required = false) String sort) {
+        return PageResponse.of(reviewService.listReviews(productId, PageRequest.of(page, size, ReviewService.sortFor(sort))).map(PublicReview::from));
     }
 
     // Full reviews including reviewerPhno, X-Service-Key only (the path has 4 segments so none of the public
@@ -47,8 +48,21 @@ public class ReviewController {
     @GetMapping("/internal/{productId}/reviews")
     public PageResponse<Review> getReviewsInternal(@PathVariable Long productId,
                                            @RequestParam(defaultValue = "0") int page,
-                                           @RequestParam(defaultValue = "20") int size) {
-        return PageResponse.of(reviewService.listReviews(productId, PageRequest.of(page, size)));
+                                           @RequestParam(defaultValue = "20") int size,
+                                           @RequestParam(required = false) String sort) {
+        return PageResponse.of(reviewService.listReviews(productId, PageRequest.of(page, size, ReviewService.sortFor(sort))));
+    }
+
+    // X-Service-Key only (no public matcher covers these paths): OrderService votes on behalf of a signed-in customer.
+    @PutMapping("/reviews/{reviewId}/helpful")
+    public PublicReview setHelpful(@PathVariable Long reviewId, @RequestParam long voterPhno,
+                                   @RequestParam(defaultValue = "true") boolean helpful) {
+        return PublicReview.from(reviewService.setHelpful(reviewId, voterPhno, helpful));
+    }
+
+    @GetMapping("/reviews/helpful/mine")
+    public List<Long> helpfulVotesOf(@RequestParam long voterPhno) {
+        return reviewService.helpfulVotesOf(voterPhno);
     }
 
     @GetMapping("/{productId}/rating-summary")

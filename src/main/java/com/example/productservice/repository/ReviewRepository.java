@@ -22,6 +22,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // millisecond, which otherwise made "newest first" nondeterministic between them. reviewId is a strictly
     // increasing IDENTITY column, so it's a reliable secondary key for "which one was actually created later".
     Page<Review> findByProductIdAndHiddenFalseOrderByCreatedAtDescReviewIdDesc(Long productId, Pageable pageable);
+    // The same two reads in whatever order the Pageable's Sort asks for (ReviewService.sortFor) - used when a client
+    // picks "most helpful", "highest" or "lowest" instead of the default newest-first.
+    Page<Review> findByProductIdAndHiddenFalse(Long productId, Pageable pageable);
+    Page<Review> findByProductIdInAndHiddenFalse(Collection<Long> productIds, Pageable pageable);
     Optional<Review> findByProductIdAndReviewerPhno(Long productId, long reviewerPhno);
     long countByProductIdAndHiddenFalse(Long productId);
     // How many (visible) reviews a given customer has left across every product - used by OrderService's

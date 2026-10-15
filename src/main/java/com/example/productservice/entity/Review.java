@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
         "rating",
         "comment",
         "photoUrl",
+        "helpfulCount",
         "createdAt",
         "flagged",
         "flagReason",
@@ -44,4 +45,6 @@ public class Review {
     // excluded from listReviews() and ratingSummary() (both the average and the count), same as if deleted, but
     // recoverable via unhideReview() unlike an actual delete.
     private boolean hidden;
+    // How many customers marked this review helpful (kept equal to the number of ReviewVote rows by ReviewService.setHelpful).
+    private int helpfulCount;
 }
